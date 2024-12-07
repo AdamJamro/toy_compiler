@@ -1,0 +1,19 @@
+PROCEDURE de(a) IS
+BEGIN
+  t:=a;
+  IF t < 0 THEN
+    RETURN
+  ENDIF
+  WHILE t>0 DO
+    t := t - 1
+    WRITE t;
+  ENDWHILE
+END
+
+PROGRAM IS
+  x
+BEGIN
+  READ x;
+  WRITE x;
+  de(x);
+END
