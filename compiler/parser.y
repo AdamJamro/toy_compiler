@@ -1,4 +1,3 @@
-
 %{
 #include <cstring>
 #include <cstdio>
@@ -11,10 +10,37 @@ extern FILE* yyin;
 extern char* yytext;
 
 void yyerror(const char *);
-int yylex(void);
+extern int my_yylex();
+#define yylex my_yylex
+
 
 using namespace std;
 %}
+
+%code requires {
+    #include <string> //TODO consider carefully legitimacy of including something here
+
+    #ifndef TOKENATTRIBUTE_DEFINED
+    #define TOKENATTRIBUTE_DEFINED
+    typedef struct TokenAttribute {
+        int type;
+        std::string str_value;
+        int int_value;
+        long long long_value;
+        int line_num;
+    } TokenAttribute;
+    enum attributetype {
+        INTEGER=0,
+        STRING=1,
+        LONG=2
+    };
+    #endif
+}
+
+%union {
+    TokenAttribute* attr;
+}
+
 
 %token NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
@@ -30,7 +56,7 @@ program_all:
     ;
 
 procedures:
-    procedures PROCEDURE proc_head IS declarations BEGIN_KW commands END
+    procedures PROCEDURE proc_head IS declarations BEGIN_KW commands END { cout << "PROCEDURE" << endl;}
     | procedures PROCEDURE proc_head IS BEGIN_KW commands END
     | %empty
     ;
@@ -117,15 +143,13 @@ identifier:
 
 
 void yyerror(const char *s) {
-    fprintf(stderr, "\nError: %s\n", s);
-
+    cerr << "\nError: " << s << endl;
     if (yytext && yytext[0] != '\n' && yytext[0] != '\r') {
-        fprintf(stdout, "Unexpected token: '%s'\n\n", yytext ? yytext : "UNKNOWN");
-    }
 
-    if (yylineno > 1) {
-        fprintf(stderr, "Line number: %d\n\n", yylineno);
     }
+    fprintf(stdout, "Unexpected token: '%s'\n", yytext ? yytext : "UNKNOWN");
+
+    cerr << "Line number: " << yylineno << endl;
 
 //    yyparse();
 }
@@ -138,29 +162,33 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Open the input file
-    ifstream inputFile(argv[1]);
-    if (!inputFile) {
-        cerr << "Error: Could not open input file " << argv[1] << endl;
-        return 1;
-    }
-
     // Open the output file
-    ofstream outputFile(argv[2]);
-    if (!outputFile) {
+    ofstream output_file(argv[2]);
+    if (!output_file) {
         cerr << "Error: Could not open output file " << argv[2] << endl;
         return 1;
     }
 
-    // Read from input file and write to output file line by line
-    std::string line;
-    while (std::getline(inputFile, line)) {
-        outputFile << yyparse() << '\n';
+    // Open the input file
+    yyin = fopen(argv[1], "r");
+    if (!yyin) {
+        cerr << "Error: Could not open input file " << argv[1] << endl;
+        return 1;
     }
 
-    // Close the files
-    inputFile.close();
-    outputFile.close();
+    yylineno = 1;
+    int parse_result = yyparse();
+
+    fclose(yyin);
+    output_file.close();
+
+    if (parse_result == 0) {
+        printf("Parsing completed successfully\n");
+        return 0;
+    } else {
+        fprintf(stderr, "Parsing failed\n");
+        return 1;
+    }
 
     cout << "Generated output into: " << argv[2] << endl;
     return 0;

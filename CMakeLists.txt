@@ -19,7 +19,10 @@ ADD_FLEX_BISON_DEPENDENCY(Scanner Parser)
 
 add_executable(compiler
         ${BISON_Parser_OUTPUTS}
+        ../compiler/lexer.cpp
         ${FLEX_Scanner_OUTPUTS}
+        ../compiler/parser.cpp
+        ../compiler/parser.h
 )
 
 #target_link_libraries(calc m)
