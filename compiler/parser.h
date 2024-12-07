@@ -44,6 +44,28 @@
 #if YYDEBUG
 extern int yydebug;
 #endif
+/* "%code requires" blocks.  */
+#line 20 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+
+    #include <string>
+
+    #ifndef TOKENATTRIBUTE_DEFINED
+    #define TOKENATTRIBUTE_DEFINED
+    typedef struct TokenAttribute {
+        int type;
+        std::string str_value;
+        int int_value;
+        long long long_value;
+        int line_num;
+    } TokenAttribute;
+    enum attributetype {
+        INTEGER=0,
+        STRING=1,
+        LONG=2
+    };
+    #endif
+
+#line 69 "../compiler/parser.h"
 
 /* Token kinds.  */
 #ifndef YYTOKENTYPE
@@ -88,7 +110,16 @@ extern int yydebug;
 
 /* Value type.  */
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
-typedef int YYSTYPE;
+union YYSTYPE
+{
+#line 40 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+
+    TokenAttribute* attr;
+
+#line 120 "../compiler/parser.h"
+
+};
+typedef union YYSTYPE YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define YYSTYPE_IS_DECLARED 1
 #endif

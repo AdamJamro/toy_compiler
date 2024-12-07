@@ -67,7 +67,7 @@
 
 
 /* First part of user prologue.  */
-#line 2 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 1 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
 #include <cstring>
 #include <cstdio>
@@ -80,11 +80,13 @@ extern FILE* yyin;
 extern char* yytext;
 
 void yyerror(const char *);
-int yylex(void);
+extern int my_yylex();
+#define yylex my_yylex
+
 
 using namespace std;
 
-#line 88 "../compiler/parser.cpp"
+#line 90 "../compiler/parser.cpp"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -559,13 +561,13 @@ static const yytype_int8 yytranslate[] =
 
 #if YYDEBUG
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
-static const yytype_int8 yyrline[] =
+static const yytype_uint8 yyrline[] =
 {
-       0,    29,    29,    33,    34,    35,    39,    40,    44,    45,
-      49,    50,    51,    52,    53,    54,    55,    56,    57,    58,
-      62,    66,    70,    71,    72,    73,    76,    77,    78,    79,
-      83,    84,    88,    89,    90,    91,    92,    93,    97,    98,
-      99,   100,   101,   102,   106,   107,   111,   112,   113
+       0,    55,    55,    59,    60,    61,    65,    66,    70,    71,
+      75,    76,    77,    78,    79,    80,    81,    82,    83,    84,
+      88,    92,    96,    97,    98,    99,   102,   103,   104,   105,
+     109,   110,   114,   115,   116,   117,   118,   119,   123,   124,
+     125,   126,   127,   128,   132,   133,   137,   138,   139
 };
 #endif
 
@@ -1233,8 +1235,14 @@ yyreduce:
   YY_REDUCE_PRINT (yyn);
   switch (yyn)
     {
+  case 3: /* procedures: procedures PROCEDURE proc_head IS declarations BEGIN_KW commands END  */
+#line 59 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+                                                                         { cout << "PROCEDURE" << endl;}
+#line 1242 "../compiler/parser.cpp"
+    break;
 
-#line 1238 "../compiler/parser.cpp"
+
+#line 1246 "../compiler/parser.cpp"
 
       default: break;
     }
@@ -1427,20 +1435,18 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 116 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 142 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
 
 
 void yyerror(const char *s) {
-    fprintf(stderr, "\nError: %s\n", s);
-
+    cerr << "\nError: " << s << endl;
     if (yytext && yytext[0] != '\n' && yytext[0] != '\r') {
-        fprintf(stdout, "Unexpected token: '%s'\n\n", yytext ? yytext : "UNKNOWN");
-    }
 
-    if (yylineno > 1) {
-        fprintf(stderr, "Line number: %d\n\n", yylineno);
     }
+    fprintf(stdout, "Unexpected token: '%s'\n", yytext ? yytext : "UNKNOWN");
+
+    cerr << "Line number: " << yylineno << endl;
 
 //    yyparse();
 }
@@ -1453,29 +1459,33 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Open the input file
-    ifstream inputFile(argv[1]);
-    if (!inputFile) {
-        cerr << "Error: Could not open input file " << argv[1] << endl;
-        return 1;
-    }
-
     // Open the output file
-    ofstream outputFile(argv[2]);
-    if (!outputFile) {
+    ofstream output_file(argv[2]);
+    if (!output_file) {
         cerr << "Error: Could not open output file " << argv[2] << endl;
         return 1;
     }
 
-    // Read from input file and write to output file line by line
-    std::string line;
-    while (std::getline(inputFile, line)) {
-        outputFile << yyparse() << '\n';
+    // Open the input file
+    yyin = fopen(argv[1], "r");
+    if (!yyin) {
+        cerr << "Error: Could not open input file " << argv[1] << endl;
+        return 1;
     }
 
-    // Close the files
-    inputFile.close();
-    outputFile.close();
+    yylineno = 1;
+    int parse_result = yyparse();
+
+    fclose(yyin);
+    output_file.close();
+
+    if (parse_result == 0) {
+        printf("Parsing completed successfully\n");
+        return 0;
+    } else {
+        fprintf(stderr, "Parsing failed\n");
+        return 1;
+    }
 
     cout << "Generated output into: " << argv[2] << endl;
     return 0;

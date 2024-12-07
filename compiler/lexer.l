@@ -1,16 +1,19 @@
 %{
 #include <ctype.h>
 #include "parser.h"
+#include <iostream>
 
-using namespace std;
+extern int yylex();
+extern int my_yylext();
 
 %}
 
-number              -?[0-9]+
-identifier          [_a-z]+
-comment_line        (("\\"|"#")([^\n]*))$\n
+number              [0-9]+
+pidentifier         [_a-z]+
+comment_line        (("\\"|"#")([^\n]*))$
 line_break          \\[ \t]*\n
 whitespace          [ \t]
+newline             \n
 
 %%
 
@@ -37,45 +40,68 @@ whitespace          [ \t]
 "WRITE"         { return WRITE; }
 "READ"          { return READ; }
 
-"+"			{ return '+'; }
+"+"			    { return '+'; }
 
-"-"			{ return '-'; }
+"-"			    { return '-'; }
 
-"*"			{ return '*'; }
+"*"			    { return '*'; }
 
-"/"			{ return '/'; }
+"/"			    { return '/'; }
 
-"%"			{ return '%'; }
+"%"			    { return '%'; }
 
-"("			{ return '('; }
+"("			    { return '('; }
 
-")"			{ return ')'; }
+")"			    { return ')'; }
 
-":="        { return ASSIGNMENT; }
+";"             { return ';'; }
 
-"!="        { return NEQ; }
+":"             { return ':'; }
 
-">="        { return GEQ; }
+","             { return ','; }
 
-"<="        { return LEQ; }
+":="            { return ASSIGNMENT; }
 
-{identifier}    { return pidentifier; }
+"="             { return '='; }
 
-{number}	{
-				yylval = atoi(yytext);
-				//printf("%d ", yylval);
-				return NUMBER;
-			}
+"<"             { return '<'; }
 
+">"             { return '>'; }
+
+"!="            { return NEQ; }
+
+">="            { return GEQ; }
+
+"<="            { return LEQ; }
+
+{pidentifier}   { return pidentifier; }
+
+{number}	    {
+                    yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
+                    yylval.attr->type = LONG;
+                    yylval.attr->long_value = std::atoll(yytext);
+                    //printf("%d ", yylval);
+                    return NUMBER;
+                }
 
 {line_break}    ;
 {comment_line}	;
 {whitespace}    ;
-\n              ;
-.			    { return YYUNDEF; }
+\n              { yylineno++; }
+\r              { /*"some random doubled space somebody thought up to throw into space inside a text file because why not"*/ }
+.			    { std::cout << "unexpected lexem: " << yytext << std::endl; }
 
 %%
 
 int yywrap() {
     return 1; // DO NOT WAIT FOR ANOTHER INPUT FILE
+}
+
+
+int my_yylex() {
+    int token = yylex();
+    printf("TokenID: %d; \n", token);
+    //std::cout << "Token: \"" << (yytext ? yytext : "UNKNOWN") << "\"" << std::endl;
+    printf("Token: \"%s\"\n", yytext ? yytext : "UNKNOWN");
+    return token;
 }
