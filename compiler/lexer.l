@@ -74,7 +74,12 @@ newline             \n
 
 "<="            { return LEQ; }
 
-{pidentifier}   { return pidentifier; }
+{pidentifier}   {
+                    yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
+                    yylval.attr->type = STRING;
+                    yylval.attr->str_value = yytext;
+                    return pidentifier;
+                }
 
 {number}	    {
                     yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));

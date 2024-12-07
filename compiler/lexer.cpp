@@ -996,11 +996,16 @@ YY_RULE_SETUP
 case 40:
 YY_RULE_SETUP
 #line 77 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
-{ return pidentifier; }
+{
+                    yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
+                    yylval.attr->type = STRING;
+                    yylval.attr->str_value = yytext;
+                    return pidentifier;
+                }
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 79 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 84 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 {
                     yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
                     yylval.attr->type = LONG;
@@ -1012,7 +1017,7 @@ YY_RULE_SETUP
 case 42:
 /* rule 42 can match eol */
 YY_RULE_SETUP
-#line 87 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 92 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 ;
 	YY_BREAK
 case 43:
@@ -1020,36 +1025,36 @@ case 43:
 (yy_c_buf_p) = yy_cp -= 1;
 YY_DO_BEFORE_ACTION; /* set up yytext again */
 YY_RULE_SETUP
-#line 88 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 93 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 ;
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
-#line 89 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 94 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 ;
 	YY_BREAK
 case 45:
 /* rule 45 can match eol */
 YY_RULE_SETUP
-#line 90 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 95 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { yylineno++; }
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 91 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 96 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { /*"some random doubled space somebody thought up to throw into space inside a text file because why not"*/ }
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
-#line 92 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 97 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { std::cout << "unexpected lexem: " << yytext << std::endl; }
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 94 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 99 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 ECHO;
 	YY_BREAK
-#line 1053 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
+#line 1058 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -2054,7 +2059,7 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 94 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 99 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 
 
 int yywrap() {

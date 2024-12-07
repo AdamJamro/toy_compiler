@@ -74,6 +74,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <map>
 
 extern int yylineno;
 extern FILE* yyin;
@@ -86,7 +87,7 @@ extern int my_yylex();
 
 using namespace std;
 
-#line 90 "../compiler/parser.cpp"
+#line 91 "../compiler/parser.cpp"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -563,11 +564,11 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    55,    55,    59,    60,    61,    65,    66,    70,    71,
-      75,    76,    77,    78,    79,    80,    81,    82,    83,    84,
-      88,    92,    96,    97,    98,    99,   102,   103,   104,   105,
-     109,   110,   114,   115,   116,   117,   118,   119,   123,   124,
-     125,   126,   127,   128,   132,   133,   137,   138,   139
+       0,    56,    56,    60,    61,    62,    66,    67,    71,    72,
+      76,    77,    78,    79,    80,    81,    82,    83,    84,    85,
+      89,    93,    97,    98,    99,   100,   103,   104,   105,   106,
+     110,   111,   115,   116,   117,   118,   119,   120,   124,   125,
+     126,   127,   128,   129,   133,   134,   138,   139,   140
 };
 #endif
 
@@ -1236,13 +1237,13 @@ yyreduce:
   switch (yyn)
     {
   case 3: /* procedures: procedures PROCEDURE proc_head IS declarations BEGIN_KW commands END  */
-#line 59 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 60 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                                          { cout << "PROCEDURE" << endl;}
-#line 1242 "../compiler/parser.cpp"
+#line 1243 "../compiler/parser.cpp"
     break;
 
 
-#line 1246 "../compiler/parser.cpp"
+#line 1247 "../compiler/parser.cpp"
 
       default: break;
     }
@@ -1435,7 +1436,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 142 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 143 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
 
 

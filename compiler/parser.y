@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <map>
 
 extern int yylineno;
 extern FILE* yyin;
@@ -13,8 +14,36 @@ void yyerror(const char *);
 extern int my_yylex();
 #define yylex my_yylex
 
-
 using namespace std;
+
+
+class register_table {
+    int available_register(void) {
+        if (free_register != 0) {
+            free_register = 0;
+            return free_register;
+        }
+
+        int index = 1;
+        while(registers.contains(index))
+            index++;
+        }
+        return index;
+    }
+
+    void delete(string pid) {
+        free_register = reg;
+    }
+
+    void add(string pid) {
+        table[pid] = available_register(void)
+    }
+
+    int free_register = 1;
+    unordered_set<int> registers;
+    unordered_map<string, int> table;
+}
+
 %}
 
 %code requires {
@@ -42,7 +71,7 @@ using namespace std;
 }
 
 
-%token NUMBER pidentifier
+%token <attr> NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
 %token BEGIN_KW
 %token PROGRAM PROCEDURE IS END
@@ -72,7 +101,10 @@ commands:
     ;
 
 command:
-    identifier ASSIGNMENT expression ';'
+    identifier ASSIGNMENT expression ';' {
+            ids[$1] = 0;
+            cout << ""
+        }
     | IF condition THEN commands ELSE commands ENDIF
     | IF condition THEN commands ENDIF
     | WHILE condition DO commands ENDWHILE
