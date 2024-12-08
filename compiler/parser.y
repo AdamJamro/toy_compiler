@@ -4,11 +4,15 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <map>
+#include <utility>
+#include <functional>
+#include <unordered_map>
+#include <unordered_set>
 
 extern int yylineno;
 extern FILE* yyin;
 extern char* yytext;
+std::ofstream output_file;
 
 void yyerror(const char *);
 extern int my_yylex();
@@ -16,33 +20,79 @@ extern int my_yylex();
 
 using namespace std;
 
+struct PairHash {
+    template <typename T1, typename T2>
+    std::size_t operator()(const std::pair<T1, T2>& pair) const {
+        std::size_t h1 = std::hash<T1>()(pair.first);
+        std::size_t h2 = std::hash<T2>()(pair.second);
+        return h1 ^ (h2 << 1); // Combine the two hashes
+    }
+};
 
 class register_table {
+private:
+    struct pid_type {
+        //auto type = INTEGER (this is a toy compiler)
+        size_t size;
+        int register_no; //first reg occupied by this pid
+    };
+
     int available_register(void) {
-        if (free_register != 0) {
-            free_register = 0;
-            return free_register;
+        if (!free_registers.empty()) {
+            auto it = free_registers.begin();
+            auto reg = (*it).first;
+
+            if (it->first + 1 < it->second) {
+                free_registers.insert(make_pair(it->first + 1, it->second));
+            }
+            free_registers.erase(it);
+
+            return reg;
+        }
+        return -1;
+        //TODO throw something
+    }
+
+    std::unordered_set<std::pair<int, int>, PairHash> free_registers; // (interval)
+    std::unordered_map<std::string, pid_type> table; // (pid, (size,register))
+
+public:
+    register_table() : free_registers(), table() {
+        free_registers.insert(make_pair(1,2<<10));
+    }
+
+    void remove(const string& pid) {
+        pid_type pid_t = table.at(pid);
+        int from = pid_t.register_no;
+        int to = from + pid_t.size;
+        free_registers.insert(make_pair(from, to));
+        table.erase(pid);
+    }
+
+    int at(const string& pid) {
+        return table.at(pid).register_no;
+    }
+
+    int add(const string& pid) {
+        if (table.contains(pid)){
+            //TODO report pid redeclaration
+            return -1;
         }
 
-        int index = 1;
-        while(registers.contains(index))
-            index++;
-        }
-        return index;
+        pid_type new_pid;
+        new_pid.size = 1;
+        new_pid.register_no = available_register();
+
+        table[pid] = new_pid;
+        return new_pid.register_no;
     }
 
-    void delete(string pid) {
-        free_register = reg;
-    }
+    void add_table(const string& pid, int from, int to) {
 
-    void add(string pid) {
-        table[pid] = available_register(void)
     }
+};
 
-    int free_register = 1;
-    unordered_set<int> registers;
-    unordered_map<string, int> table;
-}
+register_table regs;
 
 %}
 
@@ -56,7 +106,8 @@ class register_table {
         std::string str_value;
         int int_value;
         long long long_value;
-        int line_num;
+        int register_no;
+        int lineno;
     } TokenAttribute;
     enum attributetype {
         INTEGER=0,
@@ -70,7 +121,7 @@ class register_table {
     TokenAttribute* attr;
 }
 
-
+%type <attr> identifier expression value
 %token <attr> NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
 %token BEGIN_KW
@@ -102,8 +153,14 @@ commands:
 
 command:
     identifier ASSIGNMENT expression ';' {
-            ids[$1] = 0;
-            cout << ""
+            // $1->register_no -> exact location of where to put the value
+            // $3->register_no -> location of the value
+            //int pid_reg = $1->register_no;
+            //int exp_reg = $3->register_no;
+            output_file << "LOAD "<< $3->register_no << endl;
+            output_file << "STORE "<< $1->register_no << endl;
+            free($1);
+            free($3);
         }
     | IF condition THEN commands ELSE commands ENDIF
     | IF condition THEN commands ENDIF
@@ -112,8 +169,14 @@ command:
     | FOR pidentifier FROM value TO value DO commands ENDFOR
     | FOR pidentifier FROM value DOWNTO value DO commands ENDFOR
     | proc_call ';'
-    | READ identifier ';'
-    | WRITE value ';'
+    | READ identifier ';' {
+            output_file << "READ "<< $2->register_no << endl;
+            free($2);
+        }
+    | WRITE value ';' {
+            output_file << "WRITE "<< $2->register_no << endl;
+            free($2);
+        }
     ;
 
 proc_head:
@@ -125,10 +188,17 @@ proc_call:
     ;
 
 declarations:
-    declarations ',' pidentifier
-    | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']'
-    | pidentifier
-    | pidentifier '[' NUMBER ':' NUMBER ']'
+    declarations ',' pidentifier {
+            regs.add($3->str_value);
+            free($3);
+        }
+    | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']' {
+            throw std::runtime_error("Not yet implemented");
+        }
+    | pidentifier { regs.add($1->str_value); free($1); }
+    | pidentifier '[' NUMBER ':' NUMBER ']' {
+            throw std::runtime_error("Not yet implemented");
+        }
 
 args_decl:
     args_decl ',' pidentifier
@@ -143,8 +213,25 @@ args:
     ;
 
 expression:
-    value
-    | value '+' value
+    value {
+            $$ = $1;
+            cout << "$$: " << $$ << endl;
+        }
+    | value '+' value {
+            if ($1->type == $3->type) {
+                if ($1->type == STRING) {
+                    int tmp;
+                } else {
+
+                }
+            } else {
+                if ($1->type == STRING) {
+
+                } else {
+
+                }
+            }
+        }
     | value '-' value
     | value '*' value
     | value '/' value
@@ -161,13 +248,45 @@ condition:
     ;
 
 value:
-    NUMBER
-    | identifier
+    NUMBER {
+            $$ = $1;
+            $$->long_value = $1->long_value;
+            $$->type = LONG;
+        }
+    | identifier {
+            $$ = $1;
+            $$->str_value = $1->str_value;
+            $$->type = STRING;
+            $$->register_no = $1->register_no;
+        }
     ;
 
 identifier:
-    pidentifier
-    | pidentifier '[' pidentifier ']'
+    pidentifier {
+            $$ = $1;
+            $$->str_value = $1->str_value;
+            $$->lineno = yylineno;
+            $$->register_no = regs.at($1->str_value);
+            cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
+        }
+    | pidentifier '[' pidentifier ']' {
+            int tmp_reg = regs.add("tmp");
+
+            output_file << "LOAD "<< regs.at($3->str_value) << endl;
+            output_file << "STORE "<< tmp_reg << endl;
+            output_file << "LOAD "<< regs.at($1->str_value) << endl;
+            output_file << "ADD "<< tmp_reg << endl;
+            output_file << "STORE "<< tmp_reg << endl;
+
+
+            //const string& pid = $1->str_value;
+            //const string& pid = $1->long_value;
+            $$->str_value = "tmp";
+            $$->register_no = tmp_reg;
+            $$->lineno = yylineno;
+            free($1);
+            free($3);
+        }
     | pidentifier '[' NUMBER ']'
     ;
 
@@ -195,7 +314,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Open the output file
-    ofstream output_file(argv[2]);
+    output_file.open(argv[2]);
     if (!output_file) {
         cerr << "Error: Could not open output file " << argv[2] << endl;
         return 1;
