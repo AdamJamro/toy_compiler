@@ -75,16 +75,20 @@ newline             \n
 "<="            { return LEQ; }
 
 {pidentifier}   {
-                    yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
+                    //yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
+                    yylval.attr = new TokenAttribute();
                     yylval.attr->type = STRING;
+                    yylval.attr->lineno = yylineno;
                     yylval.attr->str_value = yytext;
                     return pidentifier;
                 }
 
 {number}	    {
-                    yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
+                    //yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
+                    yylval.attr = new TokenAttribute();
                     yylval.attr->type = LONG;
                     yylval.attr->long_value = std::atoll(yytext);
+                    yylval.attr->lineno = yylineno;
                     //printf("%d ", yylval);
                     return NUMBER;
                 }
@@ -105,7 +109,7 @@ int yywrap() {
 
 int my_yylex() {
     int token = yylex();
-    printf("TokenID: %d; \n", token);
+    printf("TokenID: %d;\t", token);
     //std::cout << "Token: \"" << (yytext ? yytext : "UNKNOWN") << "\"" << std::endl;
     printf("Token: \"%s\"\n", yytext ? yytext : "UNKNOWN");
     return token;

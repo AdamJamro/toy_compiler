@@ -23,6 +23,8 @@ add_executable(compiler
         ${FLEX_Scanner_OUTPUTS}
         ../compiler/parser.cpp
         ../compiler/parser.h
+        compiler/parser_utils.cpp
+        compiler/parser_utils.h
 )
 
 #target_link_libraries(calc m)

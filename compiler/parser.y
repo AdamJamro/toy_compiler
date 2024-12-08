@@ -4,11 +4,16 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <map>
+#include <utility>
+#include <functional>
+#include <unordered_map>
+#include <unordered_set>
+#include "parser_utils.h"
 
 extern int yylineno;
 extern FILE* yyin;
 extern char* yytext;
+std::ofstream output_file;
 
 void yyerror(const char *);
 extern int my_yylex();
@@ -17,32 +22,8 @@ extern int my_yylex();
 using namespace std;
 
 
-class register_table {
-    int available_register(void) {
-        if (free_register != 0) {
-            free_register = 0;
-            return free_register;
-        }
 
-        int index = 1;
-        while(registers.contains(index))
-            index++;
-        }
-        return index;
-    }
-
-    void delete(string pid) {
-        free_register = reg;
-    }
-
-    void add(string pid) {
-        table[pid] = available_register(void)
-    }
-
-    int free_register = 1;
-    unordered_set<int> registers;
-    unordered_map<string, int> table;
-}
+register_table regs;
 
 %}
 
@@ -56,7 +37,8 @@ class register_table {
         std::string str_value;
         int int_value;
         long long long_value;
-        int line_num;
+        int register_no;
+        int lineno;
     } TokenAttribute;
     enum attributetype {
         INTEGER=0,
@@ -70,7 +52,7 @@ class register_table {
     TokenAttribute* attr;
 }
 
-
+%type <attr> identifier expression value
 %token <attr> NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
 %token BEGIN_KW
@@ -102,8 +84,19 @@ commands:
 
 command:
     identifier ASSIGNMENT expression ';' {
-            ids[$1] = 0;
-            cout << ""
+            // $1->register_no -> exact location of where to put the value
+            // $3->register_no -> location of the value
+            //int pid_reg = $1->register_no;
+            //int exp_reg = $3->register_no;
+            if ($3->type == STRING) {
+                output_file << "LOAD "<< $3->register_no << "\t#" << $3->str_value << endl;
+            } else {
+                output_file << "SET "<< $3->long_value << endl;
+            }
+
+            output_file << "STORE "<< $1->register_no << "\t#" << $1->str_value << endl;
+            free($1);
+            free($3);
         }
     | IF condition THEN commands ELSE commands ENDIF
     | IF condition THEN commands ENDIF
@@ -112,8 +105,14 @@ command:
     | FOR pidentifier FROM value TO value DO commands ENDFOR
     | FOR pidentifier FROM value DOWNTO value DO commands ENDFOR
     | proc_call ';'
-    | READ identifier ';'
-    | WRITE value ';'
+    | READ identifier ';' {
+            output_file << "READ "<< $2->register_no << endl;
+            free($2);
+        }
+    | WRITE value ';' {
+            output_file << "WRITE "<< $2->register_no << endl;
+            free($2);
+        }
     ;
 
 proc_head:
@@ -125,10 +124,17 @@ proc_call:
     ;
 
 declarations:
-    declarations ',' pidentifier
-    | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']'
-    | pidentifier
-    | pidentifier '[' NUMBER ':' NUMBER ']'
+    declarations ',' pidentifier {
+            regs.add($3->str_value);
+            free($3);
+        }
+    | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']' {
+            throw std::runtime_error("Not yet implemented");
+        }
+    | pidentifier { regs.add($1->str_value); free($1); }
+    | pidentifier '[' NUMBER ':' NUMBER ']' {
+            throw std::runtime_error("Not yet implemented");
+        }
 
 args_decl:
     args_decl ',' pidentifier
@@ -143,8 +149,34 @@ args:
     ;
 
 expression:
-    value
-    | value '+' value
+    value {
+            $$ = $1;
+            cout << "$$: " << $$ << endl;
+        }
+    | value '+' value {
+            int tmp_reg = regs.add_rval();
+
+            if ($1->type == $3->type) {
+                $$ = $1;
+                if ($1->type == STRING) {
+                    output_file << "LOAD " << $1->register_no << endl;
+                    output_file << "ADD " << $3->register_no << endl;
+                    output_file << "STORE " << tmp_reg << endl;
+                } else {
+                    $$ = $1;
+                    $$->long_value = $1->long_value + $3->long_value;
+                }
+            } else {
+                if ($1->type == STRING) {
+
+                } else {
+
+                }
+            }
+
+            $$->register_no = tmp_reg;
+            free($3);
+        }
     | value '-' value
     | value '*' value
     | value '/' value
@@ -161,13 +193,45 @@ condition:
     ;
 
 value:
-    NUMBER
-    | identifier
+    NUMBER {
+            $$ = $1;
+            $$->long_value = $1->long_value;
+            $$->type = LONG;
+        }
+    | identifier {
+            $$ = $1;
+            $$->str_value = $1->str_value;
+            $$->type = STRING;
+            $$->register_no = $1->register_no;
+        }
     ;
 
 identifier:
-    pidentifier
-    | pidentifier '[' pidentifier ']'
+    pidentifier {
+            $$ = $1;
+            $$->str_value = $1->str_value;
+            $$->lineno = yylineno;
+            $$->register_no = regs.at($1->str_value);
+            cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
+        }
+    | pidentifier '[' pidentifier ']' {
+            int tmp_reg = regs.add("tmp");
+
+            output_file << "LOAD "<< regs.at($3->str_value) << endl;
+            output_file << "STORE "<< tmp_reg << endl;
+            output_file << "LOAD "<< regs.at($1->str_value) << endl;
+            output_file << "ADD "<< tmp_reg << endl;
+            output_file << "STORE "<< tmp_reg << endl;
+
+
+            //const string& pid = $1->str_value;
+            //const string& pid = $1->long_value;
+            $$->str_value = "tmp";
+            $$->register_no = tmp_reg;
+            $$->lineno = yylineno;
+            free($1);
+            free($3);
+        }
     | pidentifier '[' NUMBER ']'
     ;
 
@@ -195,7 +259,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Open the output file
-    ofstream output_file(argv[2]);
+    output_file.open(argv[2]);
     if (!output_file) {
         cerr << "Error: Could not open output file " << argv[2] << endl;
         return 1;
@@ -216,7 +280,6 @@ int main(int argc, char* argv[]) {
 
     if (parse_result == 0) {
         printf("Parsing completed successfully\n");
-        return 0;
     } else {
         fprintf(stderr, "Parsing failed\n");
         return 1;
