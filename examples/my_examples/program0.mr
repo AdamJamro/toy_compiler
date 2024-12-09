@@ -1,0 +1,27 @@
+//read x
+GET 1
+
+//y = 5 + 4
+PUT 9
+STORE 2	#y
+
+//x = x + y
+LOAD 1
+ADD 2
+STORE 1	#x
+
+//z = x + 2
+SET 2
+ADD 1
+STORE 3	#z
+
+//z = 3 + x
+SET 3
+ADD 1
+STORE 3	#z
+
+//
+PUT 1
+PUT 2
+SET 5
+PUT 0

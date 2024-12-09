@@ -1,0 +1,25 @@
+#PROCEDURE de(a) IS t BEGIN
+#  t:=a;
+#  IF t < 0 THEN
+#    t := 0-t;
+#  ENDIF
+#  WHILE t>0 DO
+#    t := t - 1;
+#    WRITE t;
+#  ENDWHILE
+#END
+
+PROGRAM IS
+  x, y, z
+BEGIN
+  READ x;
+  y := 5 + 4;
+  x := x + y;
+  z := x + 2;
+  z := 3 + x;
+  WRITE x;
+  WRITE y;
+  WRITE z;
+  WRITE 5;
+#  de(x);
+END

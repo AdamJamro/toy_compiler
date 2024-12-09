@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "parser_utils.h"
+#include <typeinfo>
 
 extern int yylineno;
 extern FILE* yyin;
@@ -84,16 +85,12 @@ commands:
 
 command:
     identifier ASSIGNMENT expression ';' {
-            // $1->register_no -> exact location of where to put the value
-            // $3->register_no -> location of the value
-            //int pid_reg = $1->register_no;
-            //int exp_reg = $3->register_no;
-            if ($3->type == STRING) {
+            /*if ($3->type == STRING) {
                 output_file << "LOAD "<< $3->register_no << "\t#" << $3->str_value << endl;
             } else {
                 output_file << "SET "<< $3->long_value << endl;
-            }
-
+            }*/
+            // expression already in r0!
             output_file << "STORE "<< $1->register_no << "\t#" << $1->str_value << endl;
             free($1);
             free($3);
@@ -106,11 +103,15 @@ command:
     | FOR pidentifier FROM value DOWNTO value DO commands ENDFOR
     | proc_call ';'
     | READ identifier ';' {
-            output_file << "READ "<< $2->register_no << endl;
+            output_file << "GET "<< $2->register_no << endl;
             free($2);
         }
     | WRITE value ';' {
-            output_file << "WRITE "<< $2->register_no << endl;
+            if ($2->type != STRING) {
+                output_file << "SET "<< $2->long_value << endl;
+                $2->register_no = 0;
+            }
+            output_file << "PUT "<< $2->register_no << endl;
             free($2);
         }
     ;
@@ -154,28 +155,40 @@ expression:
             cout << "$$: " << $$ << endl;
         }
     | value '+' value {
-            int tmp_reg = regs.add_rval();
+            //int tmp_reg = regs.add_rval();
 
             if ($1->type == $3->type) {
                 $$ = $1;
                 if ($1->type == STRING) {
                     output_file << "LOAD " << $1->register_no << endl;
                     output_file << "ADD " << $3->register_no << endl;
-                    output_file << "STORE " << tmp_reg << endl;
                 } else {
-                    $$ = $1;
                     $$->long_value = $1->long_value + $3->long_value;
+                    output_file << "PUT " << $$->long_value << endl ;
+                    //output_file << "STORE "<< tmp_reg << endl;
                 }
+                free($3);
             } else {
+                //typeof($$) str_token, num_token;
+                TokenAttribute* str_token;
+                TokenAttribute* num_token;
                 if ($1->type == STRING) {
-
+                    str_token = $1;
+                    num_token = $3;
                 } else {
-
+                    str_token = $3;
+                    num_token = $1;
                 }
+                $$ = str_token; // ensure $$ has the rval register and string type
+
+                output_file << "SET "<< num_token->long_value << endl;
+                output_file << "ADD "<< str_token->register_no << endl;
+                //output_file << "STORE "<< tmp_reg << endl;
+                free(num_token);
             }
 
-            $$->register_no = tmp_reg;
-            free($3);
+            $$->str_value = "rval";
+            $$->register_no = 0; // RESULT OF THE EXPRESSION STORED IN R0!
         }
     | value '-' value
     | value '*' value
@@ -195,8 +208,9 @@ condition:
 value:
     NUMBER {
             $$ = $1;
-            $$->long_value = $1->long_value;
-            $$->type = LONG;
+
+            //$$->str_value = "rval";
+            //$$->type = LONG;
         }
     | identifier {
             $$ = $1;
@@ -212,7 +226,7 @@ identifier:
             $$->str_value = $1->str_value;
             $$->lineno = yylineno;
             $$->register_no = regs.at($1->str_value);
-            cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
+            //cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
         }
     | pidentifier '[' pidentifier ']' {
             int tmp_reg = regs.add("tmp");
