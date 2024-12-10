@@ -4,16 +4,23 @@
 
 #ifndef PARSER_UTILS_H
 #define PARSER_UTILS_H
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 
-struct PairHash {
-    template <typename T1, typename T2>
-    std::size_t operator()(const std::pair<T1, T2>& pair) const {
-        std::size_t h1 = std::hash<T1>()(pair.first);
-        std::size_t h2 = std::hash<T2>()(pair.second);
-        return h1 ^ (h2 << 1); // Combine the two hashes
+// struct PairHash {
+//     template <typename T1, typename T2>
+//     std::size_t operator()(const std::pair<T1, T2>& pair) const {
+//         std::size_t h1 = std::hash<T1>()(pair.first);
+//         std::size_t h2 = std::hash<T2>()(pair.second);
+//         return h1 ^ (h2 << 1); // Combine the two hashes
+//     }
+// };
+
+struct CompareFirstPairEntry {
+    bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {
+        return a.first < b.first;
     }
 };
 
@@ -25,7 +32,7 @@ struct pid_type {
 
 class register_table {
 private:
-    std::unordered_set<std::pair<int, int>, PairHash> free_registers; // (interval)
+    std::set<std::pair<long long int, long long int>, CompareFirstPairEntry> free_registers; // (interval)
     std::unordered_map<std::string, pid_type> table; // (pid, (size,register))
 
 public:

@@ -48,6 +48,7 @@ extern int yydebug;
 #line 31 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
     #include <string> //TODO consider carefully legitimacy of including something here
+    #include <list>
 
     #ifndef TOKENATTRIBUTE_DEFINED
     #define TOKENATTRIBUTE_DEFINED
@@ -57,16 +58,18 @@ extern int yydebug;
         int int_value;
         long long long_value;
         int register_no;
+        std::list<std::string> translation;
         int lineno;
     } TokenAttribute;
     enum attributetype {
         INTEGER=0,
         STRING=1,
-        LONG=2
+        LONG=2,
+        COMMAND_BLOCK=3
     };
     #endif
 
-#line 70 "../compiler/parser.h"
+#line 73 "../compiler/parser.h"
 
 /* Token kinds.  */
 #ifndef YYTOKENTYPE
@@ -113,11 +116,11 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 52 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 55 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
     TokenAttribute* attr;
 
-#line 121 "../compiler/parser.h"
+#line 124 "../compiler/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
