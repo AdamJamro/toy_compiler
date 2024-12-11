@@ -22,8 +22,6 @@ extern int my_yylex();
 
 using namespace std;
 
-
-
 register_table regs;
 
 %}
@@ -50,13 +48,14 @@ register_table regs;
         COMMAND_BLOCK=3
     };
     #endif
+
 }
 
 %union {
     TokenAttribute* attr;
 }
 
-%type <attr> identifier expression value command commands main
+%type <attr> identifier expression value command commands main condition
 %token <attr> NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
 %token BEGIN_KW
@@ -69,7 +68,7 @@ register_table regs;
 program_all:
     procedures main {
             const auto& main_block = $2->translation;
-            // TODO UNCOMMENT FOLLOWING LINES:
+            // TODO UNCOMMENT LINES BELLOW:
             //const auto& procedures_block = $1->translation;
             //output_file << "JMP " << procedures_block.size(); << endl;
             //for (const auto& line : procedures_block) {
@@ -125,9 +124,39 @@ command:
             $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value);
             free($3);
         }
-    | IF condition THEN commands ELSE commands ENDIF
-    | IF condition THEN commands ENDIF
-    | WHILE condition DO commands ENDWHILE
+    | IF condition THEN commands ELSE commands ENDIF {
+            $$ = $2;
+            if ($2->type == STRING) { // condition is an lval
+                $$->translation.back().append(" " + to_string($4->translation.size() + 2));  // enter adequate block
+                $$->translation.splice($$->translation.end(), $4->translation); // paste if block
+                $$->translation.emplace_back("JUMP " + to_string($6->translation.size() + 1); // omit else block
+                $$->translation.splice($$->translation.end(), $6->translation); // paste else block
+            } else { // condition is an rval
+                if($2->long_value == 0) {
+                    $$->translation = $4->translation; // just the if block
+                } else {
+                    $$->translation = $6->translation; // just else block
+                }
+            }
+            free($4);
+        }
+    | IF condition THEN commands ENDIF {
+            $$ = $2;
+            if ($2->type == STRING) { // it's an lval
+                $$->translation.back().append(" " + to_string($4->translation.size() + 1));
+                $$->translation.splice($$->translation.end(), $4->translation);
+            } else {
+                if($2->long_value == 0) {
+                    $$->translation = $4->translation;
+                } else {
+                    $$->translation = {};
+                }
+            }
+            free($4);
+        }
+    | WHILE condition DO commands ENDWHILE {
+        throw std::runtime_error("NOT IMPLEMENTED");
+    }
     | REPEAT commands UNTIL condition ';'
     | FOR pidentifier FROM value TO value DO commands ENDFOR
     | FOR pidentifier FROM value DOWNTO value DO commands ENDFOR
@@ -227,18 +256,59 @@ expression:
     ;
 
 condition:
-    value '=' value     {throw std::runtime_error("NOT IMPLEMENTED");}
-    | value NEQ value   {throw std::runtime_error("NOT IMPLEMENTED");}
-    | value '>' value   {throw std::runtime_error("NOT IMPLEMENTED");}
-    | value '<' value   {throw std::runtime_error("NOT IMPLEMENTED");}
-    | value GEQ value   {throw std::runtime_error("NOT IMPLEMENTED");}
-    | value LEQ value   {throw std::runtime_error("NOT IMPLEMENTED");}
+    value '=' value { //EXCESS TOKEN ALREADY CLEANED UP!
+            $$ = parse_condition(
+                $1, $3,
+                list<string>({"JZERO 2", "JUMP"}), list<string>({"JZERO 2", "JUMP"}),
+                ($1->long_value == $3->long_value),
+                yylineno
+            );
+        }
+    | value NEQ value   {
+            $$ = parse_condition(
+                $1, $3,
+                list<string>({"JZERO"}), list<string>({"JZERO"}),
+                ($1->long_value != $3->long_value),
+                yylineno
+            );
+        }
+    | value '>' value   { //EXCESS TOKEN ALREADY CLEANED UP!
+            $$ = parse_condition(
+                $1, $3,
+                list<string>({"JPOS 2", "JUMP"}), list<string>({"JNEG 2", "JUMP"}),
+                ($1->long_value > $3->long_value),
+                yylineno
+            );
+        }
+    | value '<' value   {
+            $$ = parse_condition(
+                $1, $3,
+                list<string>({"JNEG 2", "JUMP"}), list<string>({"JPOS 2", "JUMP"}),
+                ($1->long_value < $3->long_value),
+                yylineno
+            );
+        }
+    | value GEQ value   {
+            $$ = parse_condition(
+                $1, $3,
+                list<string>({"JNEG"}), list<string>({"JPOS"}),
+                ($1->long_value >= $3->long_value),
+                yylineno
+            );
+        }
+    | value LEQ value   {
+            $$ = parse_condition(
+                $1, $3,
+                list<string>({"JPOS"}), list<string>({"JNEG"}),
+                ($1->long_value > $3->long_value),
+                yylineno
+            );
+        }
     ;
 
 value:
     NUMBER {
             $$ = $1;
-
             //$$->str_value = "rval";
             //$$->type = LONG;
         }
@@ -334,3 +404,4 @@ int main(int argc, char* argv[]) {
     cout << "Generated output into: " << argv[2] << endl;
     return 0;
 }
+

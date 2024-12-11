@@ -45,7 +45,7 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 31 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 29 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
     #include <string> //TODO consider carefully legitimacy of including something here
     #include <list>
@@ -69,7 +69,8 @@ extern int yydebug;
     };
     #endif
 
-#line 73 "../compiler/parser.h"
+
+#line 74 "../compiler/parser.h"
 
 /* Token kinds.  */
 #ifndef YYTOKENTYPE
@@ -116,11 +117,11 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 55 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 54 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
     TokenAttribute* attr;
 
-#line 124 "../compiler/parser.h"
+#line 125 "../compiler/parser.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

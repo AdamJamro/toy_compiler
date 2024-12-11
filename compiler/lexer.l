@@ -5,6 +5,7 @@
 
 extern int yylex();
 extern int my_yylext();
+extern int yylineno;
 
 %}
 

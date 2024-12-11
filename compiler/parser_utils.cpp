@@ -3,10 +3,48 @@
 //
 #include "parser_utils.h"
 #include <functional>
+#include <iostream>
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
 
+TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, std::list<std::string> condition_translation, const std::list<std::string> &inverse_condition_translation, const bool logic_value, const int lineno) {
+
+    if (token1->type == token2->type) {
+        if (token1->type == STRING) {
+            // PID ? PID
+            token1->translation.emplace_back("LOAD " + std::to_string(token1->register_no));
+            token1->translation.emplace_back("SUB " + std::to_string(token2->register_no));
+        } else {
+            // rVAL ? rVAL
+            token1->type = LONG;
+            token1->long_value = logic_value;
+            std::cerr << "WARNING line: " << lineno << " condition always " << (logic_value ? "TRUE" : "FALSE") << std::endl;
+        }
+    } else {
+        // PID ? rVAL
+        // we need to put rvalue on the left side of the condition
+        bool swap_needed = token1->type == STRING;
+        if (swap_needed) {
+            // swap was needed -> so we swap logic;
+            condition_translation = inverse_condition_translation;
+        }
+        const auto* str_token = swap_needed? token1 : token2;
+        const auto* rval_token = swap_needed? token2 : token1;
+
+        token1->translation.emplace_back("SET " + std::to_string(rval_token->long_value));
+        token1->translation.emplace_back("SUB " + std::to_string(str_token->register_no));
+
+        token1->type = STRING;
+    }
+
+    token1->translation.splice(token1->translation.end(), condition_translation);
+    token1->register_no = 0; // RESULT OF THE CONDITION STORED IN R0!
+    free(token2);
+    return token1;
+}
+
+//REGISTER_TABLE
 int register_table::available_register(void) {
     if (free_registers.empty()) {
         throw std::runtime_error("ERROR OUT OF REGISTERS");

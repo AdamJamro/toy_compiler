@@ -4,10 +4,11 @@
 
 #ifndef PARSER_UTILS_H
 #define PARSER_UTILS_H
+#include <list>
 #include <set>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
+#include "parser.h"
 
 // struct PairHash {
 //     template <typename T1, typename T2>
@@ -17,6 +18,12 @@
 //         return h1 ^ (h2 << 1); // Combine the two hashes
 //     }
 // };
+
+inline void Foo() {
+    printf("ABC");
+}
+
+TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, const bool, const int);
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {
@@ -50,6 +57,7 @@ public:
 
     int available_register(void);
 };
+
 
 
 #endif //PARSER_UTILS_H
