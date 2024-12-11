@@ -65,7 +65,7 @@ extern int yydebug;
         INTEGER=0,
         STRING=1,
         LONG=2,
-        COMMAND_BLOCK=3
+        ADDRESS=3
     };
     #endif
 

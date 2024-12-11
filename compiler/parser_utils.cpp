@@ -62,12 +62,31 @@ int register_table::available_register(void) {
     return reg;
 }
 
+std::pair<int, int> register_table::available_registers(int size) {
+    throw std::runtime_error("NOT IMPLEMENTED");
+    if (free_registers.empty()) {
+        throw std::runtime_error("ERROR: OUT OF REGISTERS");
+    }
+
+    const auto it = free_registers.begin();
+    const auto reg = it->first;
+
+    if (it->first + 1 < it->second) {
+        free_registers.insert(std::make_pair(it->first + 1, it->second));
+    }
+    free_registers.erase(it);
+    for (const auto& [first, last] : free_registers) {
+        printf("free regs : from %lld to %lld\n", first, last);
+    }
+    return reg;
+}
+
 register_table::register_table() : free_registers(), table() {
     free_registers.insert(std::make_pair(1,2<<29));
 }
 
 void register_table::remove(const std::string& pid) { // maybe free_pid() ?
-    auto [size, reg] = table.at(pid);
+    auto [size, reg, _] = table.at(pid);
     int from = reg;
     int to = from + size;
     auto range = std::make_pair(from, to);
@@ -111,7 +130,7 @@ void register_table::remove(const int reg) { // maybe free_pid() ?
     lower_bound = lower_bound == free_registers.begin()? lower_bound : --lower_bound;
     const auto upper_bound = free_registers.upper_bound(range);
 
-    std::cout << "OOUOUOUOUO : Lb.1: " << lower_bound->first << ", Lb.2: " << lower_bound->second <<", Ub.1: " << upper_bound->first <<", Ub.2: " <<upper_bound->second << std::endl;
+    std::cout << "hitched at: Lb.1: " << lower_bound->first << ", Lb.2: " << lower_bound->second <<", Ub.1: " << upper_bound->first <<", Ub.2: " <<upper_bound->second << std::endl;
     if (lower_bound->second < reg || reg < upper_bound->first - 1) {
         free_registers.insert(range);
     } else if (lower_bound->second + 1 == upper_bound->first) {
@@ -137,6 +156,10 @@ void register_table::remove(const int reg) { // maybe free_pid() ?
 
 int register_table::at(const std::string& pid) const {
     return table.at(pid).register_no;
+}
+
+int register_table::at(const std::string& pid, const int index) const {
+    return table.at(pid).at(index);
 }
 
 int register_table::add_rval(void) const {
@@ -175,6 +198,20 @@ int register_table::add() { // WARNING IT NEVER FREES THE REGISTER
     return new_pid.register_no;
 }
 
-void register_table::add_table(const std::string& pid, int from, int to) {
-    throw std::runtime_error("NO TABLE SUPPORT IMPLEMENTED!");
+int register_table::add_table(const std::string &pid, const int from, const int to) {
+    if (table.contains(pid)){
+        // throw std::runtime_error("Syntax Error: Redeclaration of variable");
+        return table[pid].register_no;
+    } //TODO it was simply commented out you need to handle it in the parser tho
+
+    pid_type new_pid;
+    new_pid.size = to - from;
+    new_pid.index_shift = from;
+    new_pid.register_no = available_registers(new_pid.size);
+    if (new_pid.size <= 0) {
+        throw std::invalid_argument("this program cannot declare insideout tables!");
+    };
+    table[pid] = new_pid;
+
+    return new_pid.register_no;
 }

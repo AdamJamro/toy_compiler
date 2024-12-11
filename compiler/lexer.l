@@ -54,6 +54,10 @@ newline             \n
 
 "%"			    { return '%'; }
 
+"["			    { return '['; }
+
+"]"			    { return ']'; }
+
 "("			    { return '('; }
 
 ")"			    { return ')'; }
@@ -84,6 +88,7 @@ newline             \n
                     yylval.attr->type = STRING;
                     yylval.attr->lineno = yylineno;
                     yylval.attr->str_value = yytext;
+                    yylval.attr->translation = {};
                     //yylval.attr->register_no = regs.add(yytext);
                     return pidentifier;
                 }
@@ -94,6 +99,7 @@ newline             \n
                     yylval.attr->type = LONG;
                     yylval.attr->long_value = std::atoll(yytext);
                     yylval.attr->lineno = yylineno;
+                    yylval.attr->translation = {};
                     //printf("%d ", yylval);
                     return NUMBER;
                 }

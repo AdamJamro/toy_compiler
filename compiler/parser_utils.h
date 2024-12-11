@@ -6,6 +6,7 @@
 #define PARSER_UTILS_H
 #include <list>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include "parser.h"
@@ -35,6 +36,14 @@ struct pid_type {
     //auto type = INTEGER (this is a toy compiler)
     int size;
     int register_no; //first reg occupied by this pid
+    int index_shift = 0; // first value from the table range [first, second]
+    int at(const int index) const {
+        const auto offset = index - index_shift;
+        if (offset < 0 || offset >= size) {
+            throw std::runtime_error("Access to elements outside the table is not allowed");
+        }
+        return register_no + offset;
+    }
 };
 
 class register_table {
@@ -51,6 +60,8 @@ public:
 
     int at(const std::string &pid) const;
 
+    int at(const std::string &pid, int index) const;
+
     int add_rval() const;
 
     int contains(const std::string&) const;
@@ -59,9 +70,11 @@ public:
 
     int add();
 
-    void add_table(const std::string &pid, int from, int to);
+    int add_table(const std::string &pid, int from, int to);
 
     int available_register(void);
+
+    std::pair<int, int> available_registers(int size);
 };
 
 

@@ -46,7 +46,7 @@ register_table regs;
         INTEGER=0,
         STRING=1,
         LONG=2,
-        COMMAND_BLOCK=3
+        ADDRESS=3
     };
     #endif
 
@@ -107,7 +107,6 @@ commands:
         }
     | command {
             $$ = $1;
-            $$->type = COMMAND_BLOCK;
         }
     ;
 
@@ -119,11 +118,23 @@ command:
                 output_file << "SET "<< $3->long_value << endl;
             }*/ // <- moved down the parse tree TODO : DELETE THIS
 
-            // expression already in r0!
-            $$ = $1;
-            $$->translation.splice($$->translation.end(), $3->translation);
-            $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value);
-            free($3);
+            $$ = $3;
+
+            if ($1->type == ADDRESS) {
+                if ($1->translation.empty()) { // pid[num]
+                    // expression puts its value into r0!
+                    $$->translation.emplace_back("STOREI " + to_string($1->register_no) + "\t#" + $1->str_value);
+                } else { // pid[pid]
+                    const auto tmp_reg = regs.add_rval();
+                    $$->translation.emplace_front("STORE " + to_string(tmp_reg));
+                    // expression in r0!
+                    $$->translation.emplace_back("STOREI " + to_string(tmp_reg) + "\t#" + $1->str_value + "[*]");
+                }
+            } else {
+                // expression puts its value into r0!
+                $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value);
+            }
+            free($1);
         }
     | IF condition THEN commands ELSE commands ENDIF {
             $$ = $2;
@@ -321,11 +332,25 @@ declarations:
             free($3);
         }
     | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']' {
-            throw std::runtime_error("Not yet implemented");
+            try {
+                regs.add_table($3->str_value, $3->long_value, $5->long_value);
+            } catch (std::runtime_error e) {
+                yyerror(e.what());
+            }
+            free($3);
+            free($5);
+            free($7);
         }
     | pidentifier { regs.add($1->str_value); free($1); }
     | pidentifier '[' NUMBER ':' NUMBER ']' {
-            throw std::runtime_error("Not yet implemented");
+            try {
+                regs.add_table($1->str_value, $3->long_value, $5->long_value);
+            } catch (std::runtime_error e) {
+                yyerror(e.what());
+            }
+            free($1);
+            free($3);
+            free($5);
         }
 
 args_decl:
@@ -343,6 +368,11 @@ args:
 expression:
     value {
             $$ = $1;
+            if ($1->type == STRING) {
+                $$->translation = {"LOAD " + to_string($1->register_no)};
+            } else {
+                $$->translation = {"SET " + to_string($1->long_value)};
+            }
         }
     | value '+' value {
             //int tmp_reg = regs.add_rval(); TODO DELETE
@@ -474,6 +504,7 @@ tidentifier:
 
 identifier:
     pidentifier {
+            //translation stays empty as we know the pid register location
             $$ = $1;
             $$->str_value = $1->str_value;
             $$->lineno = yylineno;
@@ -484,26 +515,24 @@ identifier:
             //cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
         }
     | pidentifier '[' pidentifier ']' {
-            int tmp_reg = regs.add("tmp");
+            $$ = $1;
+            $$->translation = {
+                "LOAD " + to_string($1->register_no),
+                "ADD " + to_string($3->register_no)
+            };
 
-
-            throw std::runtime_error("NOT IMPLEMENTED");
-            output_file << "LOAD "<< regs.at($3->str_value) << endl;
-            output_file << "STORE "<< tmp_reg << endl;
-            output_file << "LOAD "<< regs.at($1->str_value) << endl;
-            output_file << "ADD "<< tmp_reg << endl;
-            output_file << "STORE "<< tmp_reg << endl;
-
-
-            //const string& pid = $1->str_value;
-            //const string& pid = $1->long_value;
-            $$->str_value = "tmp";
-            $$->register_no = tmp_reg;
+            $$->type = ADDRESS;
             $$->lineno = yylineno;
-            free($1);
             free($3);
         }
-    | pidentifier '[' NUMBER ']'
+    | pidentifier '[' NUMBER ']' {
+            //translation stays empty as we know the pid register location
+            $$ = $1;
+            $$->register_no = $1->register_no + $3->long_value;
+            $$->type = ADDRESS;
+            $$->lineno = yylineno;
+            free($3);
+        }
     ;
 
 %%
