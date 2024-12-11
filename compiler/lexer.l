@@ -1,11 +1,14 @@
 %{
 #include <ctype.h>
 #include "parser.h"
+#include "parser_utils.h"
 #include <iostream>
 
 extern int yylex();
 extern int my_yylext();
 extern int yylineno;
+
+extern register_table regs;
 
 %}
 
@@ -81,6 +84,7 @@ newline             \n
                     yylval.attr->type = STRING;
                     yylval.attr->lineno = yylineno;
                     yylval.attr->str_value = yytext;
+                    //yylval.attr->register_no = regs.add(yytext);
                     return pidentifier;
                 }
 

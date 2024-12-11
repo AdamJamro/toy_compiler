@@ -19,7 +19,7 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
             // rVAL ? rVAL
             token1->type = LONG;
             token1->long_value = logic_value;
-            std::cerr << "WARNING line: " << lineno << " condition always " << (logic_value ? "TRUE" : "FALSE") << std::endl;
+            std::cerr << "WARNING on line: " << lineno << " condition always " << (logic_value ? "TRUE" : "FALSE") << std::endl;
         }
     } else {
         // PID ? rVAL
@@ -66,25 +66,73 @@ register_table::register_table() : free_registers(), table() {
     free_registers.insert(std::make_pair(1,2<<29));
 }
 
-void register_table::remove(const std::string& pid) {
-    auto [size, register_no] = table.at(pid);
-    int from = register_no;
+void register_table::remove(const std::string& pid) { // maybe free_pid() ?
+    auto [size, reg] = table.at(pid);
+    int from = reg;
     int to = from + size;
     auto range = std::make_pair(from, to);
 
-    const auto lower_bound = free_registers.lower_bound(range);
+    auto lower_bound = free_registers.lower_bound(range);
+    lower_bound = lower_bound == free_registers.begin()? lower_bound : --lower_bound;
     const auto upper_bound = free_registers.upper_bound(range);
-    if (lower_bound->second == from) {
+    std::cout << "OOUOUOUOUO : Lb.1: " << lower_bound->first << ", Lb.2: " << lower_bound->second <<", Ub.1: " << upper_bound->first <<", Ub.2: " <<upper_bound->second << std::endl;
+    if (lower_bound->second < reg || reg < upper_bound->first - 1) {
+        free_registers.insert(range);
+    } else if (lower_bound->second + 1 == upper_bound->first) {
+        range.first = lower_bound->first;
+        range.second = upper_bound->second;
+        free_registers.erase(lower_bound);
+        free_registers.erase(upper_bound);
+        free_registers.insert(range);
+    } else if (lower_bound->second == reg) {
         range.first = lower_bound->first;
         free_registers.erase(lower_bound);
-    }
-    if (upper_bound->first == to) {
+        free_registers.insert(range);
+    } else if (upper_bound->first - 1 == reg) {
         range.second = upper_bound->first;
         free_registers.erase(upper_bound);
+        free_registers.insert(range);
     }
 
-    free_registers.insert(std::make_pair(from, to));
     table.erase(pid);
+
+    std::cout << "free regs after remove pid:" << pid <<" : " << std::endl ;
+    for (const auto& [first, last] : free_registers) {
+        printf("regs : from %lld to %lld\n", first, last);
+    }
+}
+
+void register_table::remove(const int reg) { // maybe free_pid() ?
+
+    int from = reg;
+    int to = reg + 1;
+    auto range = std::make_pair(from, to);
+    auto lower_bound = free_registers.lower_bound(range);
+    lower_bound = lower_bound == free_registers.begin()? lower_bound : --lower_bound;
+    const auto upper_bound = free_registers.upper_bound(range);
+
+    std::cout << "OOUOUOUOUO : Lb.1: " << lower_bound->first << ", Lb.2: " << lower_bound->second <<", Ub.1: " << upper_bound->first <<", Ub.2: " <<upper_bound->second << std::endl;
+    if (lower_bound->second < reg || reg < upper_bound->first - 1) {
+        free_registers.insert(range);
+    } else if (lower_bound->second + 1 == upper_bound->first) {
+        range.first = lower_bound->first;
+        range.second = upper_bound->second;
+        free_registers.erase(lower_bound);
+        free_registers.erase(upper_bound);
+        free_registers.insert(range);
+    } else if (lower_bound->second == reg) {
+        range.first = lower_bound->first;
+        free_registers.erase(lower_bound);
+        free_registers.insert(range);
+    } else if (upper_bound->first - 1 == reg) {
+        range.second = upper_bound->first;
+        free_registers.erase(upper_bound);
+        free_registers.insert(range);
+    }
+    std::cout << "free regs after remove pid:" << reg <<" : " << std::endl ;
+    for (const auto& [first, last] : free_registers) {
+        printf("free regs : from %lld to %lld\n", first, last);
+    }
 }
 
 int register_table::at(const std::string& pid) const {
@@ -101,16 +149,29 @@ int register_table::add_rval(void) const {
     return reg;
 }
 
+int register_table::contains(const std::string& pid) const {
+    return table.contains(pid);
+}
+
 int register_table::add(const std::string& pid) {
     if (table.contains(pid)){
-        throw std::runtime_error("Syntax Error: Redeclaration of variable");
-    }
+        // throw std::runtime_error("Syntax Error: Redeclaration of variable");
+        return table[pid].register_no;
+    } //TODO it was simply commented out you need to handle it in the parser tho
 
     pid_type new_pid;
     new_pid.size = 1;
     new_pid.register_no = available_register();
 
     table[pid] = new_pid;
+    return new_pid.register_no;
+}
+
+int register_table::add() { // WARNING IT NEVER FREES THE REGISTER
+    pid_type new_pid;
+    new_pid.size = 1;
+    new_pid.register_no = available_register();
+
     return new_pid.register_no;
 }
 

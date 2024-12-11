@@ -87,6 +87,7 @@ extern char* yytext;
 std::ofstream output_file;
 
 void yyerror(const char *);
+void yyerror(const char *, int, std::string);
 extern int my_yylex();
 #define yylex my_yylex
 
@@ -95,7 +96,7 @@ using namespace std;
 register_table regs;
 
 
-#line 99 "../compiler/parser.cpp"
+#line 100 "../compiler/parser.cpp"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -183,7 +184,8 @@ enum yysymbol_kind_t
   YYSYMBOL_expression = 57,                /* expression  */
   YYSYMBOL_condition = 58,                 /* condition  */
   YYSYMBOL_value = 59,                     /* value  */
-  YYSYMBOL_identifier = 60                 /* identifier  */
+  YYSYMBOL_tidentifier = 60,               /* tidentifier  */
+  YYSYMBOL_identifier = 61                 /* identifier  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -511,16 +513,16 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  3
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   287
+#define YYLAST   271
 
 /* YYNTOKENS -- Number of terminals.  */
 #define YYNTOKENS  46
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  15
+#define YYNNTS  16
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  48
+#define YYNRULES  49
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  133
+#define YYNSTATES  134
 
 /* YYMAXUTOK -- Last valid token kind.  */
 #define YYMAXUTOK   285
@@ -572,11 +574,11 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,    69,    69,    86,    87,    88,    92,    95,   101,   107,
-     114,   127,   128,   142,   143,   144,   145,   146,   147,   151,
-     162,   166,   170,   174,   177,   178,   183,   184,   185,   186,
-     190,   191,   195,   198,   235,   236,   237,   238,   242,   252,
-     260,   268,   276,   284,   295,   300,   309,   316,   336
+       0,    70,    70,    87,    88,    89,    93,    96,   102,   108,
+     115,   128,   150,   166,   186,   216,   294,   295,   296,   300,
+     311,   315,   319,   323,   326,   327,   332,   333,   334,   335,
+     339,   340,   344,   347,   384,   385,   386,   387,   391,   401,
+     410,   419,   428,   437,   449,   454,   463,   476,   486,   506
 };
 #endif
 
@@ -600,7 +602,7 @@ static const char *const yytname[] =
   "'+'", "'-'", "'*'", "'/'", "'%'", "'='", "'>'", "'<'", "$accept",
   "program_all", "procedures", "main", "commands", "command", "proc_head",
   "proc_call", "declarations", "args_decl", "args", "expression",
-  "condition", "value", "identifier", YY_NULLPTR
+  "condition", "value", "tidentifier", "identifier", YY_NULLPTR
 };
 
 static const char *
@@ -610,7 +612,7 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-27)
+#define YYPACT_NINF (-24)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -624,20 +626,20 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int16 yypact[] =
 {
-     -27,    17,     8,   -27,    15,    25,   -27,     7,    21,    31,
-      27,   258,     3,     2,    11,    57,    14,    44,    44,    60,
-     258,    63,    44,   119,   -27,    45,    78,   258,    82,   -27,
-      83,   -26,   258,     4,    52,    85,    47,   -27,    55,    77,
-      -3,   -27,    74,    72,   146,    64,    65,   -27,   -27,   -27,
-      44,   164,    62,   -27,   -27,     6,   182,   258,    96,   -27,
-      37,    67,    68,   258,    44,    44,    44,    44,    44,    44,
-     258,    44,    44,   -27,   -27,    69,   -16,   -27,    98,   -27,
-     106,   -27,   200,    90,   -27,   107,   -27,   -27,    40,   -27,
-     -27,   -27,   -27,   -27,   -27,   213,    50,    71,   -27,    44,
-      44,    44,    44,    44,    92,   -27,   -27,   -27,   -27,   258,
-     -27,   -27,    44,    44,   -27,   -27,   -27,   -27,   -27,   -27,
-     126,   226,   111,   112,    97,   -27,   258,   258,   -27,   232,
-     245,   -27,   -27
+     -24,     8,    28,   -24,     0,     6,   -24,    17,   -14,    11,
+      -5,   242,    10,     3,    43,    47,    16,    60,    60,    57,
+     242,    64,    60,    41,   -24,    58,    80,   242,    84,   -24,
+      86,    24,   242,    15,    62,    87,    68,   -24,    65,    88,
+      -2,   -24,    82,   -24,    89,   121,    71,    73,   -24,   -24,
+     -24,    60,   148,    77,   -24,   -24,     7,   166,   242,   103,
+     -24,    44,    76,    92,   242,    60,    60,    60,    60,    60,
+      60,   242,    60,    60,   -24,   -24,    99,    55,   -24,   128,
+     -24,   129,   -24,   184,    95,   -24,   130,   -24,   -24,    -1,
+     -24,   -24,   -24,   -24,   -24,   -24,   197,    51,   105,   -24,
+      60,    60,    60,    60,    60,   101,   -24,   -24,   -24,   -24,
+     242,   -24,   -24,    60,    60,   -24,   -24,   -24,   -24,   -24,
+     -24,   135,   210,   122,   124,   107,   -24,   242,   242,   -24,
+     216,   229,   -24,   -24
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -646,33 +648,33 @@ static const yytype_int16 yypact[] =
 static const yytype_int8 yydefact[] =
 {
        5,     0,     0,     1,     0,     0,     2,     0,     0,     0,
-      24,     0,     0,     0,     0,     0,    46,     0,     0,     0,
+      24,     0,     0,     0,     0,     0,    47,     0,     0,     0,
        0,     0,     0,     0,     9,     0,     0,     0,     0,    28,
-       0,     0,     0,     0,     0,     0,     0,    44,    46,     0,
-       0,    45,     0,     0,     0,     0,     0,     7,     8,    17,
-       0,     0,    22,    29,    20,     0,     0,     0,     0,    31,
-       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
-       0,     0,     0,    18,    19,     0,    32,     6,     0,    26,
-       0,     4,     0,     0,    21,     0,    48,    47,     0,    39,
-      42,    43,    38,    40,    41,     0,     0,     0,    10,     0,
-       0,     0,     0,     0,     0,    27,     3,    25,    30,     0,
-      12,    13,     0,     0,    14,    33,    34,    35,    36,    37,
-       0,     0,     0,     0,     0,    11,     0,     0,    23,     0,
-       0,    15,    16
+       0,     0,     0,     0,     0,     0,     0,    44,    47,     0,
+       0,    45,     0,    46,     0,     0,     0,     0,     7,     8,
+      17,     0,     0,    22,    29,    20,     0,     0,     0,     0,
+      31,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,     0,    18,    19,     0,    32,     6,     0,
+      26,     0,     4,     0,     0,    21,     0,    49,    48,     0,
+      39,    42,    43,    38,    40,    41,     0,     0,     0,    10,
+       0,     0,     0,     0,     0,     0,    27,     3,    25,    30,
+       0,    12,    13,     0,     0,    14,    33,    34,    35,    36,
+      37,     0,     0,     0,     0,     0,    11,     0,     0,    23,
+       0,     0,    15,    16
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -27,   -27,   -27,   -27,   -18,   -23,   -27,   -27,   121,   -27,
-     -27,   -27,   -17,    53,    13
+     -24,   -24,   -24,   -24,   -18,   -23,   -24,   -24,   126,   -24,
+     -24,   -24,   -17,    54,   -24,    14
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
        0,     1,     2,     6,    23,    24,     9,    25,    12,    31,
-      60,    75,    39,    40,    26
+      61,    76,    39,    40,    44,    26
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -680,68 +682,66 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_uint8 yytable[] =
 {
-      48,    42,    44,    64,    65,    66,    29,    54,    55,    51,
-      79,    10,    27,    57,    56,    10,    11,     3,     4,     5,
-      32,    48,    99,   100,   101,   102,   103,     7,    48,     8,
-      41,    41,    30,    48,    45,    41,    80,    28,    28,    82,
-      67,    68,    69,    14,    16,    88,    35,    37,    38,    36,
-      61,    62,    95,    13,    17,    97,   109,   110,    18,    48,
-      34,    19,    15,    41,    43,    48,    20,    38,    21,    22,
-      84,    85,    48,   112,   113,    46,    49,    41,    41,    41,
-      41,    41,    41,    50,    41,    41,    52,    53,    58,    59,
-      36,   121,    63,    70,    71,    73,    74,    78,    48,    83,
-      98,   104,   114,    76,    86,    87,    48,    48,   129,   130,
-     105,   108,    41,    41,    41,    41,    41,    89,    90,    91,
-      92,    93,    94,    16,    96,    41,    41,   107,   120,   124,
-     126,   127,    47,    17,   128,    33,     0,    18,     0,     0,
-      19,     0,     0,     0,     0,    20,     0,    21,    22,     0,
-      16,     0,   115,   116,   117,   118,   119,     0,     0,     0,
-      17,     0,     0,     0,    18,   122,   123,    19,    16,     0,
-       0,     0,    20,    72,    21,    22,     0,    77,    17,     0,
-       0,     0,    18,     0,     0,    19,    16,     0,     0,     0,
-      20,     0,    21,    22,     0,    81,    17,     0,     0,     0,
-      18,     0,     0,    19,    16,     0,     0,     0,    20,     0,
-      21,    22,     0,   106,    17,     0,     0,    16,    18,     0,
-       0,    19,     0,     0,     0,     0,    20,    17,    21,    22,
-      16,    18,     0,   111,    19,     0,    16,     0,     0,    20,
-      17,    21,    22,   125,    18,     0,    17,    19,     0,    16,
-      18,     0,    20,    19,    21,    22,     0,   131,    20,    17,
-      21,    22,    16,    18,     0,     0,    19,     0,     0,     0,
-     132,    20,    17,    21,    22,     0,    18,     0,     0,    19,
-       0,     0,     0,     0,    20,     0,    21,    22
+      49,    42,    45,    16,    65,    66,    67,    29,     3,    52,
+       8,    80,     7,    17,    57,   110,   111,    18,    13,    27,
+      19,    10,    49,    14,    58,    20,    11,    21,    22,    49,
+      15,    41,    41,    30,    49,    46,    41,    81,     4,     5,
+      83,    68,    69,    70,    28,    16,    89,    10,    35,    28,
+      34,    36,    32,    96,    48,    17,    98,    55,    56,    18,
+      49,    43,    19,    37,    38,    41,    49,    20,    38,    21,
+      22,    62,    63,    49,   113,   114,    47,    85,    86,    41,
+      41,    41,    41,    41,    41,    51,    41,    41,    53,    50,
+      54,    60,   122,   100,   101,   102,   103,   104,    59,    49,
+      36,    71,    74,    64,    75,    77,    84,    49,    49,   130,
+     131,    72,    79,    87,    41,    41,    41,    41,    41,    90,
+      91,    92,    93,    94,    95,    16,    97,    41,    41,    88,
+      99,   105,   108,   106,   109,    17,   115,   121,   125,    18,
+      33,   127,    19,   128,   129,     0,     0,    20,    73,    21,
+      22,     0,    16,     0,   116,   117,   118,   119,   120,     0,
+       0,    78,    17,     0,     0,     0,    18,   123,   124,    19,
+      16,     0,     0,     0,    20,     0,    21,    22,     0,    82,
+      17,     0,     0,     0,    18,     0,     0,    19,    16,     0,
+       0,     0,    20,     0,    21,    22,     0,   107,    17,     0,
+       0,    16,    18,     0,     0,    19,     0,     0,     0,     0,
+      20,    17,    21,    22,    16,    18,     0,   112,    19,     0,
+      16,     0,     0,    20,    17,    21,    22,   126,    18,     0,
+      17,    19,     0,    16,    18,     0,    20,    19,    21,    22,
+       0,   132,    20,    17,    21,    22,    16,    18,     0,     0,
+      19,     0,     0,     0,   133,    20,    17,    21,    22,     0,
+      18,     0,     0,    19,     0,     0,     0,     0,    20,     0,
+      21,    22
 };
 
 static const yytype_int16 yycheck[] =
 {
-      23,    18,    20,     6,     7,     8,     4,    33,    34,    27,
-       4,     4,     9,     9,    32,     4,     9,     0,    10,    11,
-       9,    44,    38,    39,    40,    41,    42,    12,    51,     4,
-      17,    18,    30,    56,    21,    22,    30,    34,    34,    57,
-      43,    44,    45,    12,     4,    63,    32,     3,     4,    35,
-       3,     4,    70,    32,    14,    72,    16,    17,    18,    82,
-       3,    21,    35,    50,     4,    88,    26,     4,    28,    29,
-      33,    34,    95,    23,    24,    22,    31,    64,    65,    66,
-      67,    68,    69,     5,    71,    72,     4,     4,    36,     4,
-      35,   109,    15,    19,    22,    31,    31,    35,   121,     3,
-      31,     3,    31,    50,    37,    37,   129,   130,   126,   127,
-       4,     4,    99,   100,   101,   102,   103,    64,    65,    66,
-      67,    68,    69,     4,    71,   112,   113,    37,    36,     3,
-      19,    19,    13,    14,    37,    14,    -1,    18,    -1,    -1,
-      21,    -1,    -1,    -1,    -1,    26,    -1,    28,    29,    -1,
-       4,    -1,    99,   100,   101,   102,   103,    -1,    -1,    -1,
-      14,    -1,    -1,    -1,    18,   112,   113,    21,     4,    -1,
-      -1,    -1,    26,    27,    28,    29,    -1,    13,    14,    -1,
-      -1,    -1,    18,    -1,    -1,    21,     4,    -1,    -1,    -1,
-      26,    -1,    28,    29,    -1,    13,    14,    -1,    -1,    -1,
-      18,    -1,    -1,    21,     4,    -1,    -1,    -1,    26,    -1,
-      28,    29,    -1,    13,    14,    -1,    -1,     4,    18,    -1,
-      -1,    21,    -1,    -1,    -1,    -1,    26,    14,    28,    29,
-       4,    18,    -1,    20,    21,    -1,     4,    -1,    -1,    26,
-      14,    28,    29,    17,    18,    -1,    14,    21,    -1,     4,
-      18,    -1,    26,    21,    28,    29,    -1,    25,    26,    14,
-      28,    29,     4,    18,    -1,    -1,    21,    -1,    -1,    -1,
-      25,    26,    14,    28,    29,    -1,    18,    -1,    -1,    21,
-      -1,    -1,    -1,    -1,    26,    -1,    28,    29
+      23,    18,    20,     4,     6,     7,     8,     4,     0,    27,
+       4,     4,    12,    14,    32,    16,    17,    18,    32,     9,
+      21,     4,    45,    12,     9,    26,     9,    28,    29,    52,
+      35,    17,    18,    30,    57,    21,    22,    30,    10,    11,
+      58,    43,    44,    45,    34,     4,    64,     4,    32,    34,
+       3,    35,     9,    71,    13,    14,    73,    33,    34,    18,
+      83,     4,    21,     3,     4,    51,    89,    26,     4,    28,
+      29,     3,     4,    96,    23,    24,    22,    33,    34,    65,
+      66,    67,    68,    69,    70,     5,    72,    73,     4,    31,
+       4,     4,   110,    38,    39,    40,    41,    42,    36,   122,
+      35,    19,    31,    15,    31,    51,     3,   130,   131,   127,
+     128,    22,    35,    37,   100,   101,   102,   103,   104,    65,
+      66,    67,    68,    69,    70,     4,    72,   113,   114,    37,
+      31,     3,    37,     4,     4,    14,    31,    36,     3,    18,
+      14,    19,    21,    19,    37,    -1,    -1,    26,    27,    28,
+      29,    -1,     4,    -1,   100,   101,   102,   103,   104,    -1,
+      -1,    13,    14,    -1,    -1,    -1,    18,   113,   114,    21,
+       4,    -1,    -1,    -1,    26,    -1,    28,    29,    -1,    13,
+      14,    -1,    -1,    -1,    18,    -1,    -1,    21,     4,    -1,
+      -1,    -1,    26,    -1,    28,    29,    -1,    13,    14,    -1,
+      -1,     4,    18,    -1,    -1,    21,    -1,    -1,    -1,    -1,
+      26,    14,    28,    29,     4,    18,    -1,    20,    21,    -1,
+       4,    -1,    -1,    26,    14,    28,    29,    17,    18,    -1,
+      14,    21,    -1,     4,    18,    -1,    26,    21,    28,    29,
+      -1,    25,    26,    14,    28,    29,     4,    18,    -1,    -1,
+      21,    -1,    -1,    -1,    25,    26,    14,    28,    29,    -1,
+      18,    -1,    -1,    21,    -1,    -1,    -1,    -1,    26,    -1,
+      28,    29
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
@@ -750,18 +750,18 @@ static const yytype_int8 yystos[] =
 {
        0,    47,    48,     0,    10,    11,    49,    12,     4,    52,
        4,     9,    54,    32,    12,    35,     4,    14,    18,    21,
-      26,    28,    29,    50,    51,    53,    60,     9,    34,     4,
+      26,    28,    29,    50,    51,    53,    61,     9,    34,     4,
       30,    55,     9,    54,     3,    32,    35,     3,     4,    58,
-      59,    60,    58,     4,    50,    60,    59,    13,    51,    31,
-       5,    50,     4,     4,    33,    34,    50,     9,    36,     4,
-      56,     3,     4,    15,     6,     7,     8,    43,    44,    45,
-      19,    22,    27,    31,    31,    57,    59,    13,    35,     4,
-      30,    13,    50,     3,    33,    34,    37,    37,    50,    59,
-      59,    59,    59,    59,    59,    50,    59,    58,    31,    38,
-      39,    40,    41,    42,     3,     4,    13,    37,     4,    16,
-      17,    20,    23,    24,    31,    59,    59,    59,    59,    59,
-      36,    50,    59,    59,     3,    17,    19,    19,    37,    50,
-      50,    25,    25
+      59,    61,    58,     4,    60,    50,    61,    59,    13,    51,
+      31,     5,    50,     4,     4,    33,    34,    50,     9,    36,
+       4,    56,     3,     4,    15,     6,     7,     8,    43,    44,
+      45,    19,    22,    27,    31,    31,    57,    59,    13,    35,
+       4,    30,    13,    50,     3,    33,    34,    37,    37,    50,
+      59,    59,    59,    59,    59,    59,    50,    59,    58,    31,
+      38,    39,    40,    41,    42,     3,     4,    13,    37,     4,
+      16,    17,    20,    23,    24,    31,    59,    59,    59,    59,
+      59,    36,    50,    59,    59,     3,    17,    19,    19,    37,
+      50,    50,    25,    25
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
@@ -771,7 +771,7 @@ static const yytype_int8 yyr1[] =
       51,    51,    51,    51,    51,    51,    51,    51,    51,    51,
       52,    53,    54,    54,    54,    54,    55,    55,    55,    55,
       56,    56,    57,    57,    57,    57,    57,    57,    58,    58,
-      58,    58,    58,    58,    59,    59,    60,    60,    60
+      58,    58,    58,    58,    59,    59,    60,    61,    61,    61
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
@@ -781,7 +781,7 @@ static const yytype_int8 yyr2[] =
        4,     7,     5,     5,     5,     9,     9,     2,     3,     3,
        4,     4,     3,     8,     1,     6,     3,     4,     1,     2,
        3,     1,     1,     3,     3,     3,     3,     3,     3,     3,
-       3,     3,     3,     3,     1,     1,     1,     4,     4
+       3,     3,     3,     3,     1,     1,     1,     1,     4,     4
 };
 
 
@@ -1245,7 +1245,7 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* program_all: procedures main  */
-#line 69 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 70 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                     {
             const auto& main_block = (yyvsp[0].attr)->translation;
             // TODO UNCOMMENT LINES BELLOW:
@@ -1264,13 +1264,13 @@ yyreduce:
     break;
 
   case 3: /* procedures: procedures PROCEDURE proc_head IS declarations BEGIN_KW commands END  */
-#line 86 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 87 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                                          { cout << "PROCEDURE" << endl;}
 #line 1270 "../compiler/parser.cpp"
     break;
 
   case 6: /* main: PROGRAM IS declarations BEGIN_KW commands END  */
-#line 92 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 93 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                   {
             (yyval.attr) = (yyvsp[-1].attr);
         }
@@ -1278,7 +1278,7 @@ yyreduce:
     break;
 
   case 7: /* main: PROGRAM IS BEGIN_KW commands END  */
-#line 95 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 96 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                        {
             (yyval.attr) = (yyvsp[-1].attr);
         }
@@ -1286,7 +1286,7 @@ yyreduce:
     break;
 
   case 8: /* commands: commands command  */
-#line 101 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 102 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                      {
             //($1->translation).splice($1->translation.end(), $2->translation) // TODO why does it crash?
             (yyvsp[-1].attr)->translation.splice((yyvsp[-1].attr)->translation.end(), (yyvsp[0].attr)->translation);
@@ -1297,7 +1297,7 @@ yyreduce:
     break;
 
   case 9: /* commands: command  */
-#line 107 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 108 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
               {
             (yyval.attr) = (yyvsp[0].attr);
             (yyval.attr)->type = COMMAND_BLOCK;
@@ -1306,7 +1306,7 @@ yyreduce:
     break;
 
   case 10: /* command: identifier ASSIGNMENT expression ';'  */
-#line 114 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 115 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                          {
             /*if ($3->type == STRING) {
                 output_file << "LOAD "<< $3->register_no << "\t#" << $3->str_value << endl;
@@ -1323,15 +1323,44 @@ yyreduce:
 #line 1324 "../compiler/parser.cpp"
     break;
 
-  case 12: /* command: IF condition THEN commands ENDIF  */
+  case 11: /* command: IF condition THEN commands ELSE commands ENDIF  */
 #line 128 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+                                                     {
+            (yyval.attr) = (yyvsp[-5].attr);
+            if ((yyvsp[-5].attr)->type == STRING) { // condition is an lval
+                (yyvsp[-5].attr)->translation.front().append("\t# if-else head");
+                (yyval.attr)->translation.back().append(" " + to_string((yyvsp[-3].attr)->translation.size() + 2));  // enter adequate block
+
+                (yyvsp[-3].attr)->translation.front().append("\t# if block");
+                (yyval.attr)->translation.splice((yyval.attr)->translation.end(), (yyvsp[-3].attr)->translation); // paste if block
+                (yyval.attr)->translation.emplace_back("JUMP " + to_string((yyvsp[-1].attr)->translation.size() + 1)); // omit else block
+
+                (yyvsp[-1].attr)->translation.front().append("\t# else block");
+                (yyval.attr)->translation.splice((yyval.attr)->translation.end(), (yyvsp[-1].attr)->translation); // paste else block
+            } else { // condition is an rval
+                if((yyvsp[-5].attr)->long_value == 0) {
+                    (yyval.attr)->translation = (yyvsp[-3].attr)->translation; // just the if block
+                } else {
+                    (yyval.attr)->translation = (yyvsp[-1].attr)->translation; // just else block
+                }
+            }
+            free((yyvsp[-3].attr));
+            free((yyvsp[-1].attr));
+        }
+#line 1351 "../compiler/parser.cpp"
+    break;
+
+  case 12: /* command: IF condition THEN commands ENDIF  */
+#line 150 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                        {
             (yyval.attr) = (yyvsp[-3].attr);
             if ((yyvsp[-3].attr)->type == STRING) { // it's an lval
+                (yyval.attr)->translation.front().append("\t# if-cond head");
                 (yyval.attr)->translation.back().append(" " + to_string((yyvsp[-1].attr)->translation.size() + 1));
+                (yyvsp[-1].attr)->translation.front().append("\t# if block");
                 (yyval.attr)->translation.splice((yyval.attr)->translation.end(), (yyvsp[-1].attr)->translation);
             } else {
-                if((yyvsp[-3].attr)->long_value == 0) {
+                if((yyvsp[-3].attr)->long_value == 0) { //cond always true
                     (yyval.attr)->translation = (yyvsp[-1].attr)->translation;
                 } else {
                     (yyval.attr)->translation = {};
@@ -1339,20 +1368,163 @@ yyreduce:
             }
             free((yyvsp[-1].attr));
         }
-#line 1343 "../compiler/parser.cpp"
+#line 1372 "../compiler/parser.cpp"
+    break;
+
+  case 13: /* command: WHILE condition DO commands ENDWHILE  */
+#line 166 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+                                           {
+            (yyval.attr) = (yyvsp[-3].attr);
+            if ((yyvsp[-3].attr)->type == STRING) { //it's lval
+                (yyvsp[-3].attr)->translation.front().append("\t# while-do head");
+                (yyval.attr)->translation.back().append(" " + to_string((yyvsp[-1].attr)->translation.size() + 2));
+
+                (yyvsp[-1].attr)->translation.front().append("\t# while commands block");
+                (yyval.attr)->translation.splice((yyval.attr)->translation.end(), (yyvsp[-1].attr)->translation);
+                (yyval.attr)->translation.emplace_back("JUMP -" + to_string((yyval.attr)->translation.size()));
+            } else { // rval
+                if ((yyvsp[-3].attr)->long_value == 0) { // always true
+                    cerr << "Warning on line: " << yylineno << " an endless while loop!";
+                    (yyval.attr)->translation = (yyvsp[-1].attr)->translation;
+                    (yyval.attr)->translation.emplace_back("JUMP -" + to_string((yyval.attr)->translation.size()));
+                } else {
+                    (yyval.attr)->translation = {};
+                }
+            }
+            free((yyvsp[-1].attr));
+    }
+#line 1397 "../compiler/parser.cpp"
+    break;
+
+  case 14: /* command: REPEAT commands UNTIL condition ';'  */
+#line 186 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+                                          {
+            (yyval.attr) = (yyvsp[-3].attr);
+            if ((yyvsp[-1].attr)->type == STRING) { //lval
+                (yyval.attr)->translation.front().append("\t# repeat-until commands block");
+
+                // invert condition (used only for shorter repeat-until loops)
+                // TODO replace by invert_condition($4);
+                if ((yyvsp[-1].attr)->translation.back() == "JUMP") {
+                    (yyvsp[-1].attr)->translation.pop_back();
+                    (yyvsp[-1].attr)->translation.back() = (yyvsp[-1].attr)->translation.back().substr(0, (yyvsp[-1].attr)->translation.back().find(' '));
+
+                } else {
+                    (yyvsp[-1].attr)->translation.back() = (yyvsp[-1].attr)->translation.back().substr(0, (yyvsp[-1].attr)->translation.back().find(' '));
+                    (yyvsp[-1].attr)->translation.back().append(" 2");
+                    (yyvsp[-1].attr)->translation.emplace_back("JUMP");
+                }
+
+                (yyvsp[-1].attr)->translation.front().append("\t# repeat-until footer");
+                (yyval.attr)->translation.splice((yyval.attr)->translation.end(), (yyvsp[-1].attr)->translation);
+                (yyval.attr)->translation.back().append(" -" + to_string((yyval.attr)->translation.size() - 1));
+            } else { // rval
+                if ((yyvsp[-1].attr)->long_value == 0) {
+                    cerr << "Warning on line: " << yylineno << " an endless while loop!" << endl;
+                    (yyval.attr)->translation.emplace_back("JUMP -" + to_string((yyvsp[-3].attr)->translation.size()));
+                } else {
+                    // pass, commands already in $$
+                }
+            }
+            free((yyvsp[-1].attr));
+        }
+#line 1432 "../compiler/parser.cpp"
+    break;
+
+  case 15: /* command: FOR tidentifier FROM value TO value DO commands ENDFOR  */
+#line 216 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+                                                             {
+            // Could be optimized if we knew what value resides in value tokens
+            (yyval.attr) = (yyvsp[-7].attr);
+
+            const auto pid_register = regs.at((yyvsp[-7].attr)->str_value);
+            const auto boundary_register = regs.add();
+
+            if ((yyvsp[-5].attr)->type != STRING && (yyvsp[-3].attr)->type != STRING) { // [rVAL, rVAL]
+
+            }
+
+            // examine alteration of pid inside the loop
+            auto line_count = 0;
+            for (const auto& line : (yyvsp[-1].attr)->translation) {
+                line_count++;
+                if ((line.compare(0, 6 + (yyvsp[-7].attr)->str_value.length(), "STORE " + to_string(pid_register)) == 0) ||
+                (line.compare(0, 4 + (yyvsp[-7].attr)->str_value.length(), "GET " + to_string(pid_register)) == 0)) {
+                    yyerror("for-loop iterator moddification inside the loop is forbidden!", (yyvsp[-7].attr)->lineno + line_count, (yyvsp[-7].attr)->str_value);
+                }
+            }
+
+            list<string> for_head;
+            list<string> condition_translation;
+
+            if ((yyvsp[-5].attr)->type != STRING && (yyvsp[-3].attr)->type != STRING) { // SPECIAL CASE [rVAL, rVAL] can be optimized like:
+                if ((yyvsp[-5].attr)->long_value > (yyvsp[-3].attr)->long_value) {
+                    const auto error_msg = "FROM " + to_string((yyvsp[-5].attr)->long_value) + " TO " + to_string((yyvsp[-3].attr)->long_value);
+                    yyerror("invalid range in for loop", (yyvsp[-7].attr)->lineno, error_msg);
+                }
+                for_head = {
+                    "SET " + to_string((yyvsp[-5].attr)->long_value - (yyvsp[-3].attr)->long_value), // store only one value v == v1-v2 <= 0
+                    "STORE " + to_string(pid_register),
+                    "JUMP " + to_string((yyvsp[-1].attr)->translation.size() + 2),
+                };
+                condition_translation = {
+                    "LOAD " + to_string(pid_register),
+                    "JPOS 5", // exit for
+                    "SET 1", // TODO OPTIMIZE
+                    "ADD " + to_string(pid_register),
+                    "STORE " + to_string(pid_register)
+                };
+                condition_translation.emplace_back("JUMP -" + to_string(condition_translation.size() + (yyvsp[-1].attr)->translation.size()));
+            } else { // DEFAULT FOR LOOP
+                for_head = {
+                    ((yyvsp[-3].attr)->type == STRING ? "LOAD " + to_string((yyvsp[-3].attr)->register_no) : "SET " + to_string((yyvsp[-3].attr)->long_value)),
+                    "STORE " + to_string(boundary_register),
+                    ((yyvsp[-5].attr)->type == STRING ? "LOAD " + to_string((yyvsp[-5].attr)->register_no) : "SET " + to_string((yyvsp[-5].attr)->long_value)),
+                    "STORE " + to_string(pid_register),
+                    "JUMP " + to_string((yyvsp[-1].attr)->translation.size() + 2),
+                };
+                condition_translation = {
+                    "LOAD " + to_string(pid_register),
+                    "SUB " + to_string(boundary_register),
+                    "JPOS 5", // exit for
+                    "SET 1", // TODO OPTIMIZE
+                    "ADD " + to_string(pid_register),
+                    "STORE " + to_string(pid_register)
+                };
+                condition_translation.emplace_back("JUMP -" + to_string(condition_translation.size() + (yyvsp[-1].attr)->translation.size()));
+            }
+
+            //comments
+            for_head.front().append("\t# for loop head");
+            condition_translation.front().append("\t# for loop cond-footer");
+            (yyvsp[-1].attr)->translation.front().append("\t# for loop commands block");
+
+            //translation scheme
+            (yyval.attr)->translation = for_head;
+            (yyval.attr)->translation.splice((yyval.attr)->translation.end(), (yyvsp[-1].attr)->translation);
+            (yyval.attr)->translation.splice((yyval.attr)->translation.end(), condition_translation); // most heavily repeated loop part
+
+            //cleanup
+            regs.remove((yyvsp[-7].attr)->str_value);
+            regs.remove(boundary_register);
+            free((yyvsp[-5].attr));
+            free((yyvsp[-3].attr));
+            free((yyvsp[-1].attr));
+        }
+#line 1515 "../compiler/parser.cpp"
     break;
 
   case 18: /* command: READ identifier ';'  */
-#line 147 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 296 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                           {
             (yyval.attr) = (yyvsp[-1].attr);
             (yyval.attr)->translation.emplace_back("GET " + to_string((yyvsp[-1].attr)->register_no));
         }
-#line 1352 "../compiler/parser.cpp"
+#line 1524 "../compiler/parser.cpp"
     break;
 
   case 19: /* command: WRITE value ';'  */
-#line 151 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 300 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                       {
             (yyval.attr) = (yyvsp[-1].attr);
             if ((yyvsp[-1].attr)->type != STRING) {
@@ -1361,50 +1533,50 @@ yyreduce:
             }
             (yyval.attr)->translation.emplace_back("PUT " + to_string((yyvsp[-1].attr)->register_no));
         }
-#line 1365 "../compiler/parser.cpp"
+#line 1537 "../compiler/parser.cpp"
     break;
 
   case 22: /* declarations: declarations ',' pidentifier  */
-#line 170 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 319 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                  {
             regs.add((yyvsp[0].attr)->str_value);
             free((yyvsp[0].attr));
         }
-#line 1374 "../compiler/parser.cpp"
+#line 1546 "../compiler/parser.cpp"
     break;
 
   case 23: /* declarations: declarations ',' pidentifier '[' NUMBER ':' NUMBER ']'  */
-#line 174 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 323 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                              {
             throw std::runtime_error("Not yet implemented");
         }
-#line 1382 "../compiler/parser.cpp"
+#line 1554 "../compiler/parser.cpp"
     break;
 
   case 24: /* declarations: pidentifier  */
-#line 177 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 326 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                   { regs.add((yyvsp[0].attr)->str_value); free((yyvsp[0].attr)); }
-#line 1388 "../compiler/parser.cpp"
+#line 1560 "../compiler/parser.cpp"
     break;
 
   case 25: /* declarations: pidentifier '[' NUMBER ':' NUMBER ']'  */
-#line 178 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 327 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                             {
             throw std::runtime_error("Not yet implemented");
         }
-#line 1396 "../compiler/parser.cpp"
+#line 1568 "../compiler/parser.cpp"
     break;
 
   case 32: /* expression: value  */
-#line 195 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 344 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
           {
             (yyval.attr) = (yyvsp[0].attr);
         }
-#line 1404 "../compiler/parser.cpp"
+#line 1576 "../compiler/parser.cpp"
     break;
 
   case 33: /* expression: value '+' value  */
-#line 198 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 347 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                       {
             //int tmp_reg = regs.add_rval(); TODO DELETE
 
@@ -1417,7 +1589,7 @@ yyreduce:
                 } else {
                     // RVAL + RVAL
                     (yyval.attr)->long_value = (yyvsp[-2].attr)->long_value + (yyvsp[0].attr)->long_value;
-                    (yyval.attr)->translation.emplace_back("PUT " + to_string((yyval.attr)->long_value));
+                    (yyval.attr)->translation.emplace_back("SET " + to_string((yyval.attr)->long_value));
                 }
                 free((yyvsp[0].attr));
             } else {
@@ -1442,50 +1614,50 @@ yyreduce:
             (yyval.attr)->register_no = 0; // RESULT OF THE EXPRESSION STORED IN R0!
             //EXCESS TOKEN ALREADY CLEANED UP!
         }
-#line 1446 "../compiler/parser.cpp"
+#line 1618 "../compiler/parser.cpp"
     break;
 
   case 34: /* expression: value '-' value  */
-#line 235 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 384 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {throw std::runtime_error("NOT IMPLEMENTED");}
-#line 1452 "../compiler/parser.cpp"
+#line 1624 "../compiler/parser.cpp"
     break;
 
   case 35: /* expression: value '*' value  */
-#line 236 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 385 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {throw std::runtime_error("NOT IMPLEMENTED");}
-#line 1458 "../compiler/parser.cpp"
+#line 1630 "../compiler/parser.cpp"
     break;
 
   case 36: /* expression: value '/' value  */
-#line 237 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 386 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {throw std::runtime_error("NOT IMPLEMENTED");}
-#line 1464 "../compiler/parser.cpp"
+#line 1636 "../compiler/parser.cpp"
     break;
 
   case 37: /* expression: value '%' value  */
-#line 238 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 387 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {throw std::runtime_error("NOT IMPLEMENTED");}
-#line 1470 "../compiler/parser.cpp"
+#line 1642 "../compiler/parser.cpp"
     break;
 
   case 38: /* condition: value '=' value  */
-#line 242 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 391 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                     { //EXCESS TOKEN ALREADY CLEANED UP!
-            cout << ((yyvsp[-2].attr)->long_value == (yyvsp[0].attr)->long_value) << endl;
-
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
                 list<string>({"JZERO 2", "JUMP"}), list<string>({"JZERO 2", "JUMP"}),
                 ((yyvsp[-2].attr)->long_value == (yyvsp[0].attr)->long_value),
                 yylineno
             );
+            // store an inverse jump (a weird somersault for smaller repeat-until loops)
+            (yyval.attr)->str_value = "JZERO";
         }
-#line 1485 "../compiler/parser.cpp"
+#line 1657 "../compiler/parser.cpp"
     break;
 
   case 39: /* condition: value NEQ value  */
-#line 252 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 401 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -1493,12 +1665,13 @@ yyreduce:
                 ((yyvsp[-2].attr)->long_value != (yyvsp[0].attr)->long_value),
                 yylineno
             );
+            (yyval.attr)->str_value = "JZERO 2\nJUMP";
         }
-#line 1498 "../compiler/parser.cpp"
+#line 1671 "../compiler/parser.cpp"
     break;
 
   case 40: /* condition: value '>' value  */
-#line 260 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 410 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         { //EXCESS TOKEN ALREADY CLEANED UP!
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -1506,12 +1679,13 @@ yyreduce:
                 ((yyvsp[-2].attr)->long_value > (yyvsp[0].attr)->long_value),
                 yylineno
             );
+            (yyval.attr)->str_value = "JPOS";
         }
-#line 1511 "../compiler/parser.cpp"
+#line 1685 "../compiler/parser.cpp"
     break;
 
   case 41: /* condition: value '<' value  */
-#line 268 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 419 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -1519,12 +1693,13 @@ yyreduce:
                 ((yyvsp[-2].attr)->long_value < (yyvsp[0].attr)->long_value),
                 yylineno
             );
+            (yyval.attr)->str_value = "JNEG";
         }
-#line 1524 "../compiler/parser.cpp"
+#line 1699 "../compiler/parser.cpp"
     break;
 
   case 42: /* condition: value GEQ value  */
-#line 276 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 428 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -1532,12 +1707,13 @@ yyreduce:
                 ((yyvsp[-2].attr)->long_value >= (yyvsp[0].attr)->long_value),
                 yylineno
             );
+            (yyval.attr)->str_value = "JNEG 2\nJUMP";
         }
-#line 1537 "../compiler/parser.cpp"
+#line 1713 "../compiler/parser.cpp"
     break;
 
   case 43: /* condition: value LEQ value  */
-#line 284 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 437 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -1545,45 +1721,64 @@ yyreduce:
                 ((yyvsp[-2].attr)->long_value > (yyvsp[0].attr)->long_value),
                 yylineno
             );
+            (yyval.attr)->str_value = "JPOS 2\nJUMP";
         }
-#line 1550 "../compiler/parser.cpp"
+#line 1727 "../compiler/parser.cpp"
     break;
 
   case 44: /* value: NUMBER  */
-#line 295 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 449 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
            {
             (yyval.attr) = (yyvsp[0].attr);
             //$$->str_value = "rval";
             //$$->type = LONG;
         }
-#line 1560 "../compiler/parser.cpp"
+#line 1737 "../compiler/parser.cpp"
     break;
 
   case 45: /* value: identifier  */
-#line 300 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 454 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                  {
             (yyval.attr) = (yyvsp[0].attr);
             (yyval.attr)->str_value = (yyvsp[0].attr)->str_value;
             (yyval.attr)->type = STRING;
             (yyval.attr)->register_no = (yyvsp[0].attr)->register_no;
         }
-#line 1571 "../compiler/parser.cpp"
+#line 1748 "../compiler/parser.cpp"
     break;
 
-  case 46: /* identifier: pidentifier  */
-#line 309 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+  case 46: /* tidentifier: pidentifier  */
+#line 463 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+                {
+            if (regs.contains((yyvsp[0].attr)->str_value)) {
+                yyerror("ambiguous declaration");
+                //throw std::runtime_error("Error: line no: " + to_string(yylineno) + " ambuguous identifier " + $1->str_value);
+            }
+            (yyval.attr) = (yyvsp[0].attr);
+            (yyval.attr)->str_value = (yyvsp[0].attr)->str_value;
+            (yyval.attr)->lineno = yylineno;
+            (yyval.attr)->register_no = regs.add((yyvsp[0].attr)->str_value);
+        }
+#line 1763 "../compiler/parser.cpp"
+    break;
+
+  case 47: /* identifier: pidentifier  */
+#line 476 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                 {
             (yyval.attr) = (yyvsp[0].attr);
             (yyval.attr)->str_value = (yyvsp[0].attr)->str_value;
             (yyval.attr)->lineno = yylineno;
+            if (!regs.contains((yyvsp[0].attr)->str_value)) {
+                yyerror("undefined identifier", yylineno, (yyval.attr)->str_value);
+            }
             (yyval.attr)->register_no = regs.at((yyvsp[0].attr)->str_value);
             //cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
         }
-#line 1583 "../compiler/parser.cpp"
+#line 1778 "../compiler/parser.cpp"
     break;
 
-  case 47: /* identifier: pidentifier '[' pidentifier ']'  */
-#line 316 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+  case 48: /* identifier: pidentifier '[' pidentifier ']'  */
+#line 486 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                       {
             int tmp_reg = regs.add("tmp");
 
@@ -1604,11 +1799,11 @@ yyreduce:
             free((yyvsp[-3].attr));
             free((yyvsp[-1].attr));
         }
-#line 1608 "../compiler/parser.cpp"
+#line 1803 "../compiler/parser.cpp"
     break;
 
 
-#line 1612 "../compiler/parser.cpp"
+#line 1807 "../compiler/parser.cpp"
 
       default: break;
     }
@@ -1801,7 +1996,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 339 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 509 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
 
 
@@ -1813,6 +2008,21 @@ void yyerror(const char *s) {
     fprintf(stdout, "Unexpected token: '%s'\n", yytext ? yytext : "UNKNOWN");
 
     cerr << "Line number: " << yylineno << endl;
+
+    exit(1);
+
+//    yyparse();
+}
+
+void yyerror(const char *s, int lineno, string lexem) {
+    cerr << "\nError: " << s << endl;
+    if (yytext && yytext[0] != '\n' && yytext[0] != '\r') {
+
+    }
+    cerr << "Unexpected token: " << lexem << endl;
+    cerr << "Line number: " << lineno << endl;
+
+    exit(1);
 
 //    yyparse();
 }

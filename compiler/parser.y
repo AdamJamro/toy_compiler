@@ -17,6 +17,7 @@ extern char* yytext;
 std::ofstream output_file;
 
 void yyerror(const char *);
+void yyerror(const char *, int, std::string);
 extern int my_yylex();
 #define yylex my_yylex
 
@@ -55,7 +56,7 @@ register_table regs;
     TokenAttribute* attr;
 }
 
-%type <attr> identifier expression value command commands main condition
+%type <attr> identifier tidentifier expression value command commands main condition
 %token <attr> NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
 %token BEGIN_KW
@@ -127,9 +128,14 @@ command:
     | IF condition THEN commands ELSE commands ENDIF {
             $$ = $2;
             if ($2->type == STRING) { // condition is an lval
+                $2->translation.front().append("\t# if-else head");
                 $$->translation.back().append(" " + to_string($4->translation.size() + 2));  // enter adequate block
+
+                $4->translation.front().append("\t# if block");
                 $$->translation.splice($$->translation.end(), $4->translation); // paste if block
-                $$->translation.emplace_back("JUMP " + to_string($6->translation.size() + 1); // omit else block
+                $$->translation.emplace_back("JUMP " + to_string($6->translation.size() + 1)); // omit else block
+
+                $6->translation.front().append("\t# else block");
                 $$->translation.splice($$->translation.end(), $6->translation); // paste else block
             } else { // condition is an rval
                 if($2->long_value == 0) {
@@ -139,14 +145,17 @@ command:
                 }
             }
             free($4);
+            free($6);
         }
     | IF condition THEN commands ENDIF {
             $$ = $2;
             if ($2->type == STRING) { // it's an lval
+                $$->translation.front().append("\t# if-cond head");
                 $$->translation.back().append(" " + to_string($4->translation.size() + 1));
+                $4->translation.front().append("\t# if block");
                 $$->translation.splice($$->translation.end(), $4->translation);
             } else {
-                if($2->long_value == 0) {
+                if($2->long_value == 0) { //cond always true
                     $$->translation = $4->translation;
                 } else {
                     $$->translation = {};
@@ -155,11 +164,134 @@ command:
             free($4);
         }
     | WHILE condition DO commands ENDWHILE {
-        throw std::runtime_error("NOT IMPLEMENTED");
+            $$ = $2;
+            if ($2->type == STRING) { //it's lval
+                $2->translation.front().append("\t# while-do head");
+                $$->translation.back().append(" " + to_string($4->translation.size() + 2));
+
+                $4->translation.front().append("\t# while commands block");
+                $$->translation.splice($$->translation.end(), $4->translation);
+                $$->translation.emplace_back("JUMP -" + to_string($$->translation.size()));
+            } else { // rval
+                if ($2->long_value == 0) { // always true
+                    cerr << "Warning on line: " << yylineno << " an endless while loop!";
+                    $$->translation = $4->translation;
+                    $$->translation.emplace_back("JUMP -" + to_string($$->translation.size()));
+                } else {
+                    $$->translation = {};
+                }
+            }
+            free($4);
     }
-    | REPEAT commands UNTIL condition ';'
-    | FOR pidentifier FROM value TO value DO commands ENDFOR
-    | FOR pidentifier FROM value DOWNTO value DO commands ENDFOR
+    | REPEAT commands UNTIL condition ';' {
+            $$ = $2;
+            if ($4->type == STRING) { //lval
+                $$->translation.front().append("\t# repeat-until commands block");
+
+                // invert condition (used only for shorter repeat-until loops)
+                // TODO replace by invert_condition($4);
+                if ($4->translation.back() == "JUMP") {
+                    $4->translation.pop_back();
+                    $4->translation.back() = $4->translation.back().substr(0, $4->translation.back().find(' '));
+
+                } else {
+                    $4->translation.back() = $4->translation.back().substr(0, $4->translation.back().find(' '));
+                    $4->translation.back().append(" 2");
+                    $4->translation.emplace_back("JUMP");
+                }
+
+                $4->translation.front().append("\t# repeat-until footer");
+                $$->translation.splice($$->translation.end(), $4->translation);
+                $$->translation.back().append(" -" + to_string($$->translation.size() - 1));
+            } else { // rval
+                if ($4->long_value == 0) {
+                    cerr << "Warning on line: " << yylineno << " an endless while loop!" << endl;
+                    $$->translation.emplace_back("JUMP -" + to_string($2->translation.size()));
+                } else {
+                    // pass, commands already in $$
+                }
+            }
+            free($4);
+        }
+    | FOR tidentifier FROM value TO value DO commands ENDFOR {
+            // Could be optimized if we knew what value resides in value tokens
+            $$ = $2;
+
+            const auto pid_register = regs.at($2->str_value);
+            const auto boundary_register = regs.add();
+
+            if ($4->type != STRING && $6->type != STRING) { // [rVAL, rVAL]
+
+            }
+
+            // examine alteration of pid inside the loop
+            auto line_count = 0;
+            for (const auto& line : $8->translation) {
+                line_count++;
+                if ((line.compare(0, 6 + $2->str_value.length(), "STORE " + to_string(pid_register)) == 0) ||
+                (line.compare(0, 4 + $2->str_value.length(), "GET " + to_string(pid_register)) == 0)) {
+                    yyerror("for-loop iterator moddification inside the loop is forbidden!", $2->lineno + line_count, $2->str_value);
+                }
+            }
+
+            list<string> for_head;
+            list<string> condition_translation;
+
+            if ($4->type != STRING && $6->type != STRING) { // SPECIAL CASE [rVAL, rVAL] can be optimized like:
+                if ($4->long_value > $6->long_value) {
+                    const auto error_msg = "FROM " + to_string($4->long_value) + " TO " + to_string($6->long_value);
+                    yyerror("invalid range in for loop", $2->lineno, error_msg);
+                }
+                for_head = {
+                    "SET " + to_string($4->long_value - $6->long_value), // store only one value v == v1-v2 <= 0
+                    "STORE " + to_string(pid_register),
+                    "JUMP " + to_string($8->translation.size() + 2),
+                };
+                condition_translation = {
+                    "LOAD " + to_string(pid_register),
+                    "JPOS 5", // exit for
+                    "SET 1", // TODO OPTIMIZE
+                    "ADD " + to_string(pid_register),
+                    "STORE " + to_string(pid_register)
+                };
+                condition_translation.emplace_back("JUMP -" + to_string(condition_translation.size() + $8->translation.size()));
+            } else { // DEFAULT FOR LOOP
+                for_head = {
+                    ($6->type == STRING ? "LOAD " + to_string($6->register_no) : "SET " + to_string($6->long_value)),
+                    "STORE " + to_string(boundary_register),
+                    ($4->type == STRING ? "LOAD " + to_string($4->register_no) : "SET " + to_string($4->long_value)),
+                    "STORE " + to_string(pid_register),
+                    "JUMP " + to_string($8->translation.size() + 2),
+                };
+                condition_translation = {
+                    "LOAD " + to_string(pid_register),
+                    "SUB " + to_string(boundary_register),
+                    "JPOS 5", // exit for
+                    "SET 1", // TODO OPTIMIZE
+                    "ADD " + to_string(pid_register),
+                    "STORE " + to_string(pid_register)
+                };
+                condition_translation.emplace_back("JUMP -" + to_string(condition_translation.size() + $8->translation.size()));
+            }
+
+            //comments
+            for_head.front().append("\t# for loop head");
+            condition_translation.front().append("\t# for loop cond-footer");
+            $8->translation.front().append("\t# for loop commands block");
+
+            //translation scheme
+            $$->translation = for_head;
+            $$->translation.splice($$->translation.end(), $8->translation);
+            $$->translation.splice($$->translation.end(), condition_translation); // most heavily repeated loop part
+
+            //cleanup
+            regs.remove($2->str_value);
+            regs.remove(boundary_register);
+            free($4);
+            free($6);
+            free($8);
+        }
+    | FOR tidentifier FROM value DOWNTO value DO commands ENDFOR
     | proc_call ';'
     | READ identifier ';' {
             $$ = $2;
@@ -224,7 +356,7 @@ expression:
                 } else {
                     // RVAL + RVAL
                     $$->long_value = $1->long_value + $3->long_value;
-                    $$->translation.emplace_back("PUT " + to_string($$->long_value));
+                    $$->translation.emplace_back("SET " + to_string($$->long_value));
                 }
                 free($3);
             } else {
@@ -263,6 +395,8 @@ condition:
                 ($1->long_value == $3->long_value),
                 yylineno
             );
+            // store an inverse jump (a weird somersault for smaller repeat-until loops)
+            $$->str_value = "JZERO";
         }
     | value NEQ value   {
             $$ = parse_condition(
@@ -271,6 +405,7 @@ condition:
                 ($1->long_value != $3->long_value),
                 yylineno
             );
+            $$->str_value = "JZERO 2\nJUMP";
         }
     | value '>' value   { //EXCESS TOKEN ALREADY CLEANED UP!
             $$ = parse_condition(
@@ -279,6 +414,7 @@ condition:
                 ($1->long_value > $3->long_value),
                 yylineno
             );
+            $$->str_value = "JPOS";
         }
     | value '<' value   {
             $$ = parse_condition(
@@ -287,6 +423,7 @@ condition:
                 ($1->long_value < $3->long_value),
                 yylineno
             );
+            $$->str_value = "JNEG";
         }
     | value GEQ value   {
             $$ = parse_condition(
@@ -295,6 +432,7 @@ condition:
                 ($1->long_value >= $3->long_value),
                 yylineno
             );
+            $$->str_value = "JNEG 2\nJUMP";
         }
     | value LEQ value   {
             $$ = parse_condition(
@@ -303,6 +441,7 @@ condition:
                 ($1->long_value > $3->long_value),
                 yylineno
             );
+            $$->str_value = "JPOS 2\nJUMP";
         }
     ;
 
@@ -320,11 +459,27 @@ value:
         }
     ;
 
+tidentifier:
+    pidentifier {
+            if (regs.contains($1->str_value)) {
+                yyerror("ambiguous declaration");
+                //throw std::runtime_error("Error: line no: " + to_string(yylineno) + " ambuguous identifier " + $1->str_value);
+            }
+            $$ = $1;
+            $$->str_value = $1->str_value;
+            $$->lineno = yylineno;
+            $$->register_no = regs.add($1->str_value);
+        }
+    ;
+
 identifier:
     pidentifier {
             $$ = $1;
             $$->str_value = $1->str_value;
             $$->lineno = yylineno;
+            if (!regs.contains($1->str_value)) {
+                yyerror("undefined identifier", yylineno, $$->str_value);
+            }
             $$->register_no = regs.at($1->str_value);
             //cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
         }
@@ -362,6 +517,21 @@ void yyerror(const char *s) {
     fprintf(stdout, "Unexpected token: '%s'\n", yytext ? yytext : "UNKNOWN");
 
     cerr << "Line number: " << yylineno << endl;
+
+    exit(1);
+
+//    yyparse();
+}
+
+void yyerror(const char *s, int lineno, string lexem) {
+    cerr << "\nError: " << s << endl;
+    if (yytext && yytext[0] != '\n' && yytext[0] != '\r') {
+
+    }
+    cerr << "Unexpected token: " << lexem << endl;
+    cerr << "Line number: " << lineno << endl;
+
+    exit(1);
 
 //    yyparse();
 }

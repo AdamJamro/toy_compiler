@@ -47,11 +47,17 @@ public:
 
     void remove(const std::string &pid);
 
+    void remove(int reg);
+
     int at(const std::string &pid) const;
 
     int add_rval() const;
 
+    int contains(const std::string&) const;
+
     int add(const std::string &pid);
+
+    int add();
 
     void add_table(const std::string &pid, int from, int to);
 
