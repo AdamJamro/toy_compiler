@@ -8,9 +8,37 @@
 #include <unordered_set>
 #include <utility>
 
-TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, std::list<std::string> condition_translation, const std::list<std::string> &inverse_condition_translation, const bool logic_value, const int lineno) {
+TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, std::list<std::string> condition_translation, const std::list<std::string> &inverse_condition_translation, const bool logic_value, const int tmp_register, const int lineno) {
 
-    if (token1->type == token2->type) {
+    if (token1->type == ADDRESS || token2->type == ADDRESS) {
+        auto swap = token1->type != ADDRESS;
+        auto * const adr_token = swap ? token2 : token1;
+        auto * const other_token = swap ? token1 : token2;
+
+        if (other_token->type == ADDRESS) {
+            adr_token->translation.emplace_back("LOADI 0");
+            adr_token->translation.emplace_back("STORE " + std::to_string(tmp_register));
+            adr_token->translation.splice(adr_token->translation.end(),  other_token->translation);
+            adr_token->translation.emplace_back("LOADI 0");
+            adr_token->translation.emplace_back("SUB " + std::to_string(tmp_register));
+            token1->translation = adr_token->translation; // we reuse this token1 and return it later
+        } else if (other_token->type == STRING) {
+            adr_token->translation.emplace_back("LOADI 0");
+            adr_token->translation.emplace_back("SUB " + std::to_string(other_token->register_no));
+            token1->translation = adr_token->translation;
+        } else if (other_token->type == LONG) {
+            // adr_token already put its addres in r0
+            adr_token->translation.emplace_back("LOADI 0");
+            adr_token->translation.emplace_back("SUB [" + std::to_string(other_token->long_value) + "]"); // todo notify main about new cached const?
+            token1->translation = adr_token->translation;
+        } else {
+            throw std::invalid_argument("invalid token type");
+        }
+        if (swap) {
+            condition_translation = inverse_condition_translation;
+        }
+        token1->type = STRING;
+    } else if (token1->type == token2->type) {
         if (token1->type == STRING) {
             // PID ? PID
             token1->translation.emplace_back("LOAD " + std::to_string(token1->register_no));
@@ -26,11 +54,11 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
         // we need to put rvalue on the left side of the condition
         const bool swap_needed = token1->type == STRING;
         if (swap_needed) {
-            // swap was needed -> so we swap logic;
+            // swap was needed -> so we need to swap logic;
             condition_translation = inverse_condition_translation;
         }
-        const auto* str_token = swap_needed? token1 : token2;
-        const auto* rval_token = swap_needed? token2 : token1;
+        auto const * const str_token = swap_needed? token1 : token2;
+        auto const * const rval_token = swap_needed? token2 : token1;
 
         token1->translation.emplace_back("SET " + std::to_string(rval_token->long_value));
         token1->translation.emplace_back("SUB " + std::to_string(str_token->register_no));
@@ -40,6 +68,7 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
 
     token1->translation.splice(token1->translation.end(), condition_translation);
     token1->register_no = 0; // RESULT OF THE CONDITION STORED IN R0!
+
     free(token2);
     return token1;
 }
@@ -178,14 +207,17 @@ int register_table::at(const std::string& pid, const int index) const {
     return table.at(pid).at(index);
 }
 
-int register_table::add_rval(void) const {
+int register_table::add_rval(void) const { // maybe rename to add_tmp or get_free_register
     if (free_registers.empty()) {
         throw std::runtime_error("ERROR OUT OF REGISTERS");
     }
     const auto it = free_registers.begin();
     const auto reg = it->first;
-
     return reg;
+}
+
+pid_type register_table::get_pid(const std::string& pid) const {
+    return table.at(pid);
 }
 
 int register_table::contains(const std::string& pid) const {

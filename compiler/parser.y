@@ -24,6 +24,7 @@ extern int my_yylex();
 using namespace std;
 
 register_table regs;
+set<long> cached_constants = {};
 
 %}
 
@@ -75,6 +76,10 @@ program_all:
             //for (const auto& line : procedures_block) {
             //    output_file << line << endl;
             //}
+            for (auto const constant : cached_constants) { // TODO postprocessing
+                output_file << "SET " << constant << endl;
+                output_file << "STORE [" << constant << "]" << endl;
+            }
             for (const auto& line : main_block) {
                 output_file << line << endl;
             }
@@ -139,7 +144,7 @@ command:
         }
     | IF condition THEN commands ELSE commands ENDIF {
             $$ = $2;
-            if ($2->type == STRING) { // condition is an lval
+            if ($2->type != LONG) { // condition is an lval
                 $2->translation.front().append("\t# if-else head");
                 $$->translation.back().append(" " + to_string($4->translation.size() + 2));  // enter adequate block (last jump opcode lacks an argument by default)
 
@@ -149,31 +154,27 @@ command:
 
                 $6->translation.front().append("\t# else (cond false) block");
                 $$->translation.splice($$->translation.end(), $6->translation); // paste else block
-            } else if ($2->type == LONG) { // condition is an rval
+            } else { // condition is an rval
                 if($2->long_value == 0) {
                     $$->translation = $4->translation; // just the if block
                 } else {
                     $$->translation = $6->translation; // just else block
                 }
-            } else if ($2->type == ADDRESS){ // condition uses tables
-
-            } else {
-                throw std::runtime_error("INTERNAL ERROR: invalid condition type");
             }
             free($4);
             free($6);
         }
     | IF condition THEN commands ENDIF {
             $$ = $2;
-            if ($2->type == STRING) { // it's an lval
+            if ($2->type != LONG) { // it's an lval
                 $$->translation.front().append("\t# if-cond head");
                 $$->translation.back().append(" " + to_string($4->translation.size() + 1));
                 $4->translation.front().append("\t# if block");
                 $$->translation.splice($$->translation.end(), $4->translation);
             } else {
-                if($2->long_value == 0) { //cond always true
+                if($2->long_value != 0) { //cond always true
                     $$->translation = $4->translation;
-                } else {
+                } else { //cond false
                     $$->translation = {};
                 }
             }
@@ -327,10 +328,11 @@ command:
             for_footer = {
                 "LOAD " + to_string(tid_register),
                 CONDITIONAL_JUMP + " 5", // exit for
-                "SET 1", // TODO CACHE ONE
-                "ADD " + to_string(tid_register),
+                "ADD [one]",
                 "STORE " + to_string(tid_register)
             };
+            cached_constants.insert(1);// we need to cache one
+
             for_footer.emplace_back("JUMP -" + to_string(for_footer.size() + $8->translation.size()));
             // jump to the first line of commands inside the loop ($8->translation)
 
@@ -493,6 +495,7 @@ condition:
                 $1, $3,
                 list<string>({"JZERO 2", "JUMP"}), list<string>({"JZERO 2", "JUMP"}),
                 ($1->long_value == $3->long_value),
+                regs.add_rval(),
                 yylineno
             );
             // store an inverse jump (a weird somersault for smaller repeat-until loops)
@@ -503,6 +506,7 @@ condition:
                 $1, $3,
                 list<string>({"JZERO"}), list<string>({"JZERO"}),
                 ($1->long_value != $3->long_value),
+                regs.add_rval(),
                 yylineno
             );
             $$->str_value = "JZERO 2\nJUMP";
@@ -512,6 +516,7 @@ condition:
                 $1, $3,
                 list<string>({"JPOS 2", "JUMP"}), list<string>({"JNEG 2", "JUMP"}),
                 ($1->long_value > $3->long_value),
+                regs.add_rval(),
                 yylineno
             );
             $$->str_value = "JPOS";
@@ -521,6 +526,7 @@ condition:
                 $1, $3,
                 list<string>({"JNEG 2", "JUMP"}), list<string>({"JPOS 2", "JUMP"}),
                 ($1->long_value < $3->long_value),
+                regs.add_rval(),
                 yylineno
             );
             $$->str_value = "JNEG";
@@ -530,6 +536,7 @@ condition:
                 $1, $3,
                 list<string>({"JNEG"}), list<string>({"JPOS"}),
                 ($1->long_value >= $3->long_value),
+                regs.add_rval(),
                 yylineno
             );
             $$->str_value = "JNEG 2\nJUMP";
@@ -539,6 +546,7 @@ condition:
                 $1, $3,
                 list<string>({"JPOS"}), list<string>({"JNEG"}),
                 ($1->long_value > $3->long_value),
+                regs.add_rval(),
                 yylineno
             );
             $$->str_value = "JPOS 2\nJUMP";
@@ -575,7 +583,8 @@ identifier:
     pidentifier {
             //translation stays empty as we know the pid register location
             $$ = $1;
-            $$->str_value = $1->str_value;
+            //$$->str_value = $1->str_value;
+            $$->type = STRING;
             $$->lineno = yylineno;
             if (!regs.contains($1->str_value)) {
                 yyerror("undefined identifier", yylineno, $$->str_value);
@@ -585,10 +594,10 @@ identifier:
         }
     | pidentifier '[' pidentifier ']' {
             $$ = $1;
-            $$->translation = {
-                "SET " + to_string(regs.at($1->str_value)), // we know exact location where the table begin!
-                "ADD " + to_string(regs.at($3->str_value))
-            };
+            const auto tab_offset = regs.at($1->str_value) - regs.get_pid($1->str_value).index_shift;
+            cached_constants.insert(tab_offset); // cache offset
+            $$->translation.emplace_back("LOAD [" + to_string(tab_offset) + "]"); // we know exact location where the table begin!
+            $$->translation.emplace_back("ADD " + to_string(regs.at($3->str_value)));
             $$->type = ADDRESS;
             $$->lineno = yylineno;
             free($3);
@@ -596,7 +605,11 @@ identifier:
     | pidentifier '[' NUMBER ']' {
             //translation stays empty as we know the pid register location
             $$ = $1;
-            $$->register_no = $1->register_no + $3->long_value;
+            try {
+                $$->register_no = regs.at($1->str_value, $3->long_value);
+            } catch (const std::runtime_error& e) {
+                yyerror(e.what(), yylineno, $1->str_value + "[" + to_string($3->long_value) + "]");
+            }
             $$->type = STRING; // treat as regular pid as we know exact location of the register
             $$->lineno = yylineno;
             free($3);

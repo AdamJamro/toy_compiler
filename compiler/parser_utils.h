@@ -20,7 +20,7 @@
 //     }
 // };
 
-TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, const bool, const int);
+TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, bool, int, int);
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {
@@ -59,6 +59,8 @@ public:
     int at(const std::string &pid, int index) const;
 
     int add_rval() const;
+
+    pid_type get_pid(const std::string &pid) const;
 
     int contains(const std::string&) const;
 
