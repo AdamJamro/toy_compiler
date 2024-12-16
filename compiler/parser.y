@@ -17,7 +17,7 @@ extern char* yytext;
 std::ofstream output_file;
 
 void yyerror(const char *);
-void yyerror(const char *, int, std::string);
+void yyerror(const std::string&, int, const std::string&);
 extern int my_yylex();
 #define yylex my_yylex
 
@@ -118,20 +118,21 @@ command:
                 output_file << "SET "<< $3->long_value << endl;
             }*/ // <- moved down the parse tree TODO : DELETE THIS
 
-            $$ = $3;
+            $$ = $3; // put expression->translation into $$->translation
 
             if ($1->type == ADDRESS) {
-                if ($1->translation.empty()) { // pid[num]
+                if ($1->translation.empty()) { // pid[num] todo DELETE THIS CASE AS TRANSLATION CANNOT BE EMPTY ANYMORE!
                     // expression puts its value into r0!
                     $$->translation.emplace_back("STOREI " + to_string($1->register_no) + "\t#" + $1->str_value);
                 } else { // pid[pid]
-                    const auto tmp_reg = regs.add_rval();
-                    $$->translation.emplace_front("STORE " + to_string(tmp_reg));
-                    // expression in r0!
-                    $$->translation.emplace_back("STOREI " + to_string(tmp_reg) + "\t#" + $1->str_value + "[*]");
+                    const auto tmp_reg = regs.add_rval(); // store address here
+                    $1->translation.emplace_back("STORE " + to_string(tmp_reg) + "\t#tmp pid address");
+                    $$->translation.splice($$->translation.begin(), $1->translation);
+                    // expression puts its value into r0
+                    $$->translation.emplace_back("STOREI " + to_string(tmp_reg) + "\t#" + $1->str_value + "[..]");
                 }
             } else {
-                // expression puts its value into r0!
+                // expression value already in r0!
                 $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value);
             }
             free($1);
@@ -140,20 +141,24 @@ command:
             $$ = $2;
             if ($2->type == STRING) { // condition is an lval
                 $2->translation.front().append("\t# if-else head");
-                $$->translation.back().append(" " + to_string($4->translation.size() + 2));  // enter adequate block
+                $$->translation.back().append(" " + to_string($4->translation.size() + 2));  // enter adequate block (last jump opcode lacks an argument by default)
 
-                $4->translation.front().append("\t# if block");
+                $4->translation.front().append("\t# if (cond ture) block");
                 $$->translation.splice($$->translation.end(), $4->translation); // paste if block
                 $$->translation.emplace_back("JUMP " + to_string($6->translation.size() + 1)); // omit else block
 
-                $6->translation.front().append("\t# else block");
+                $6->translation.front().append("\t# else (cond false) block");
                 $$->translation.splice($$->translation.end(), $6->translation); // paste else block
-            } else { // condition is an rval
+            } else if ($2->type == LONG) { // condition is an rval
                 if($2->long_value == 0) {
                     $$->translation = $4->translation; // just the if block
                 } else {
                     $$->translation = $6->translation; // just else block
                 }
+            } else if ($2->type == ADDRESS){ // condition uses tables
+
+            } else {
+                throw std::runtime_error("INTERNAL ERROR: invalid condition type");
             }
             free($4);
             free($6);
@@ -200,7 +205,7 @@ command:
                 $$->translation.front().append("\t# repeat-until commands block");
 
                 // invert condition (used only for shorter repeat-until loops)
-                // TODO replace by invert_condition($4);
+                // TODO replace by some invert_condition($4) function call
                 if ($4->translation.back() == "JUMP") {
                     $4->translation.pop_back();
                     $4->translation.back() = $4->translation.back().substr(0, $4->translation.back().find(' '));
@@ -225,79 +230,125 @@ command:
             free($4);
         }
     | FOR tidentifier FROM value TO value DO commands ENDFOR {
-            // Could be optimized if we knew what value resides in value tokens
             $$ = $2;
 
-            const auto pid_register = regs.at($2->str_value);
-            const auto boundary_register = regs.add();
+            const auto tid_register = regs.at($2->str_value);
 
-            if ($4->type != STRING && $6->type != STRING) { // [rVAL, rVAL]
-
-            }
-
-            // examine alteration of pid inside the loop
+            // examine illegal alteration of temporary-identifier inside the loop
             auto line_count = 0;
             for (const auto& line : $8->translation) {
                 line_count++;
-                if ((line.compare(0, 6 + $2->str_value.length(), "STORE " + to_string(pid_register)) == 0) ||
-                (line.compare(0, 4 + $2->str_value.length(), "GET " + to_string(pid_register)) == 0)) {
-                    yyerror("for-loop iterator moddification inside the loop is forbidden!", $2->lineno + line_count, $2->str_value);
+                if ((line.compare(0, 6 + $2->str_value.length(), "STORE " + to_string(tid_register)) == 0) ||
+                (line.compare(0, 4 + $2->str_value.length(), "GET " + to_string(tid_register)) == 0)) {
+                    yyerror("for-loop iterator modification inside the loop is forbidden!", $2->lineno + line_count, $2->str_value);
                 }
             }
+            // check for invalid range
+            if ($4->type == LONG && $6->type == LONG &&
+                $4->long_value > $6->long_value) {
+                const auto error_msg = "FROM " + to_string($4->long_value) + " TO " + to_string($6->long_value);
+                yyerror("invalid range in for loop", $2->lineno, error_msg);
+            }
 
+            // create for_head
+            string CONDITIONAL_JUMP; // remember if we did v1 - v2 or v2 - v1 to decide when to stop the loop in the footer
             list<string> for_head;
-            list<string> condition_translation;
-
-            if ($4->type != STRING && $6->type != STRING) { // SPECIAL CASE [rVAL, rVAL] can be optimized like:
-                if ($4->long_value > $6->long_value) {
-                    const auto error_msg = "FROM " + to_string($4->long_value) + " TO " + to_string($6->long_value);
-                    yyerror("invalid range in for loop", $2->lineno, error_msg);
-                }
+            list<string> for_footer;
+            if ($4->type == LONG && $6->type == LONG) { // SPECIAL CASE [rVAL, rVAL] can be optimized like:
                 for_head = {
                     "SET " + to_string($4->long_value - $6->long_value), // store only one value v == v1-v2 <= 0
-                    "STORE " + to_string(pid_register),
-                    "JUMP " + to_string($8->translation.size() + 2),
+                    "STORE " + to_string(tid_register),
                 };
-                condition_translation = {
-                    "LOAD " + to_string(pid_register),
-                    "JPOS 5", // exit for
-                    "SET 1", // TODO OPTIMIZE
-                    "ADD " + to_string(pid_register),
-                    "STORE " + to_string(pid_register)
-                };
-                condition_translation.emplace_back("JUMP -" + to_string(condition_translation.size() + $8->translation.size()));
-            } else { // DEFAULT FOR LOOP
+                CONDITIONAL_JUMP = "JPOS";
+            } else if ($4->type == LONG && $6->type == STRING) {
                 for_head = {
-                    ($6->type == STRING ? "LOAD " + to_string($6->register_no) : "SET " + to_string($6->long_value)),
-                    "STORE " + to_string(boundary_register),
-                    ($4->type == STRING ? "LOAD " + to_string($4->register_no) : "SET " + to_string($4->long_value)),
-                    "STORE " + to_string(pid_register),
-                    "JUMP " + to_string($8->translation.size() + 2),
+                    "SET "  + to_string($4->long_value),
+                    "SUB "  + to_string($6->register_no),
+                    "STORE "+ to_string(tid_register),
                 };
-                condition_translation = {
-                    "LOAD " + to_string(pid_register),
-                    "SUB " + to_string(boundary_register),
-                    "JPOS 5", // exit for
-                    "SET 1", // TODO OPTIMIZE
-                    "ADD " + to_string(pid_register),
-                    "STORE " + to_string(pid_register)
+                CONDITIONAL_JUMP = "JPOS";
+            } else if ($4->type == STRING && $6->type == LONG) {
+                for_head = {
+                    "SET "  + to_string($6->long_value),
+                    "SUB "  + to_string($4->register_no),
+                    "STORE "+ to_string(tid_register),
                 };
-                condition_translation.emplace_back("JUMP -" + to_string(condition_translation.size() + $8->translation.size()));
+                CONDITIONAL_JUMP = "JNEG";
+            } else if ($4->type == STRING && $6->type == STRING) {
+                for_head = {
+                    "LOAD " + to_string($6->register_no),
+                    "SUB "  + to_string($4->register_no),
+                    "STORE "+ to_string(tid_register),
+                };
+                CONDITIONAL_JUMP = "JNEG";
+            } else if ($4->type == ADDRESS && $6->type == ADDRESS) {
+                const auto tmp_reg = regs.add_rval();
+                for_head = $4->translation; // load address1 to r0
+                for_head.emplace_back("LOADI 0");
+                for_head.emplace_back("STORE " + to_string(tmp_reg));
+                for_head.splice(for_head.end(), $6->translation);
+                for_head.emplace_back("LOADI 0");
+                for_head.emplace_back("SUB "   + to_string(tmp_reg));
+                CONDITIONAL_JUMP = "JPOS";
+            } else if ($4->type == ADDRESS && $6->type == LONG) {
+                // TODO important not to forget that simple SET cache optimization fails for this case
+                const auto tmp_reg = regs.add_rval();
+                for_head = $4->translation;
+                for_head.emplace_back("LOADI 0");
+                for_head.emplace_back("STORE " + to_string(tmp_reg));
+                for_head.emplace_back("SET "   + to_string($6->long_value));
+                for_head.emplace_back("SUB "   + to_string(tmp_reg));
+                CONDITIONAL_JUMP = "JNEG";
+            } else if ($4->type == LONG && $6->type == ADDRESS) {
+                const auto tmp_reg = regs.add_rval();
+                for_head = $6->translation;
+                for_head.emplace_back("LOADI 0");
+                for_head.emplace_back("STORE " + to_string(tmp_reg));
+                for_head.emplace_back("SET "   + to_string($4->long_value));
+                for_head.emplace_back("SUB "   + to_string(tmp_reg));
+                CONDITIONAL_JUMP = "JPOS";
+            } else if ($4->type == ADDRESS && $6->type == STRING) {
+                for_head = {
+                    "LOADI 0",
+                    "SUB " + to_string($6->register_no),
+                };
+                for_head.splice(for_head.begin(), $4->translation);
+                CONDITIONAL_JUMP = "JPOS";
+            } else if ($4->type == STRING && $6->type == ADDRESS) {
+                for_head = {
+                    "LOADI 0",
+                    "SUB "  + to_string($4->register_no),
+                };
+                for_head.splice(for_head.begin(), $6->translation);
+                CONDITIONAL_JUMP = "JNEG";
             }
+            // conditional jump over the command block will soon be added down below!
+
+            for_footer = {
+                "LOAD " + to_string(tid_register),
+                CONDITIONAL_JUMP + " 5", // exit for
+                "SET 1", // TODO CACHE ONE
+                "ADD " + to_string(tid_register),
+                "STORE " + to_string(tid_register)
+            };
+            for_footer.emplace_back("JUMP -" + to_string(for_footer.size() + $8->translation.size()));
+            // jump to the first line of commands inside the loop ($8->translation)
 
             //comments
             for_head.front().append("\t# for loop head");
-            condition_translation.front().append("\t# for loop cond-footer");
+            for_footer.front().append("\t# for loop cond-footer");
             $8->translation.front().append("\t# for loop commands block");
 
             //translation scheme
             $$->translation = for_head;
+            if ($4->type != LONG || $6->type != LONG) {
+                $$->translation.emplace_back(CONDITIONAL_JUMP + " " + to_string($8->translation.size() + for_footer.size() + 1)); // jump out of the loop
+            }
             $$->translation.splice($$->translation.end(), $8->translation);
-            $$->translation.splice($$->translation.end(), condition_translation); // most heavily repeated loop part
+            $$->translation.splice($$->translation.end(), for_footer); // most important part of the loop
 
             //cleanup
-            regs.remove($2->str_value);
-            regs.remove(boundary_register);
+            regs.remove($2->str_value); // regs.remove(tid_register);
             free($4);
             free($6);
             free($8);
@@ -328,12 +379,20 @@ proc_call:
 
 declarations:
     declarations ',' pidentifier {
-            regs.add($3->str_value);
+            const auto& pid = $3->str_value;
+            if (regs.contains(pid)) {
+                yyerror("identifier redeclaration", yylineno-1, pid);
+            }
+            regs.add(pid);
             free($3);
         }
     | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']' {
+            const auto& pid = $3->str_value;
+            if (regs.contains(pid)) {
+                yyerror("identifier redeclaration", yylineno-1, pid);
+            }
             try {
-                regs.add_table($3->str_value, $3->long_value, $5->long_value);
+                regs.add_table(pid, $5->long_value, $7->long_value);
             } catch (std::runtime_error e) {
                 yyerror(e.what());
             }
@@ -341,8 +400,19 @@ declarations:
             free($5);
             free($7);
         }
-    | pidentifier { regs.add($1->str_value); free($1); }
+    | pidentifier {
+            const auto& pid = $1->str_value;
+            if (regs.contains(pid)) {
+                yyerror("identifier redeclaration", yylineno-1, pid);
+            }
+            regs.add(pid);
+            free($1);
+        }
     | pidentifier '[' NUMBER ':' NUMBER ']' {
+            const auto& pid = $3->str_value;
+            if (regs.contains(pid)) {
+                yyerror("identifier redeclaration", yylineno-1, pid);
+            }
             try {
                 regs.add_table($1->str_value, $3->long_value, $5->long_value);
             } catch (std::runtime_error e) {
@@ -483,9 +553,8 @@ value:
         }
     | identifier {
             $$ = $1;
-            $$->str_value = $1->str_value;
-            $$->type = STRING;
-            $$->register_no = $1->register_no;
+            //$$->str_value = $1->str_value;
+            //$$->register_no = $1->register_no;
         }
     ;
 
@@ -517,10 +586,9 @@ identifier:
     | pidentifier '[' pidentifier ']' {
             $$ = $1;
             $$->translation = {
-                "LOAD " + to_string($1->register_no),
-                "ADD " + to_string($3->register_no)
+                "SET " + to_string(regs.at($1->str_value)), // we know exact location where the table begin!
+                "ADD " + to_string(regs.at($3->str_value))
             };
-
             $$->type = ADDRESS;
             $$->lineno = yylineno;
             free($3);
@@ -529,7 +597,7 @@ identifier:
             //translation stays empty as we know the pid register location
             $$ = $1;
             $$->register_no = $1->register_no + $3->long_value;
-            $$->type = ADDRESS;
+            $$->type = STRING; // treat as regular pid as we know exact location of the register
             $$->lineno = yylineno;
             free($3);
         }
@@ -552,17 +620,13 @@ void yyerror(const char *s) {
 //    yyparse();
 }
 
-void yyerror(const char *s, int lineno, string lexem) {
-    cerr << "\nError: " << s << endl;
-    if (yytext && yytext[0] != '\n' && yytext[0] != '\r') {
-
-    }
+void yyerror(const std::string& msg, int lineno, const std::string& lexem) {
+    cerr << "\nError: " << msg << endl;
+    //if (yytext && yytext[0] != '\n' && yytext[0] != '\r') {
     cerr << "Unexpected token: " << lexem << endl;
     cerr << "Line number: " << lineno << endl;
-
     exit(1);
-
-//    yyparse();
+//    yyparse(); //TODO
 }
 
 int main(int argc, char* argv[]) {

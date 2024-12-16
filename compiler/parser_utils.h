@@ -20,15 +20,11 @@
 //     }
 // };
 
-inline void Foo() {
-    printf("ABC");
-}
-
 TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, const bool, const int);
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {
-        return a.first < b.first;
+        return a.first == b.first? a.second < b.second : a.first < b.first;
     }
 };
 
@@ -72,9 +68,9 @@ public:
 
     int add_table(const std::string &pid, int from, int to);
 
-    int available_register(void);
+    int assign_register(void);
 
-    std::pair<int, int> available_registers(int size);
+    int assign_registers(int size);
 };
 
 

@@ -8,6 +8,7 @@ extern int yylex();
 extern int my_yylext();
 extern int yylineno;
 
+extern void yyerror(const char*);
 extern register_table regs;
 
 %}

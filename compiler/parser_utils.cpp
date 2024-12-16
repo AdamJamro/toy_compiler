@@ -24,7 +24,7 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
     } else {
         // PID ? rVAL
         // we need to put rvalue on the left side of the condition
-        bool swap_needed = token1->type == STRING;
+        const bool swap_needed = token1->type == STRING;
         if (swap_needed) {
             // swap was needed -> so we swap logic;
             condition_translation = inverse_condition_translation;
@@ -45,7 +45,9 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
 }
 
 //REGISTER_TABLE
-int register_table::available_register(void) {
+int register_table::assign_register() {
+    return assign_registers(1);
+
     if (free_registers.empty()) {
         throw std::runtime_error("ERROR OUT OF REGISTERS");
     }
@@ -62,21 +64,35 @@ int register_table::available_register(void) {
     return reg;
 }
 
-std::pair<int, int> register_table::available_registers(int size) {
-    throw std::runtime_error("NOT IMPLEMENTED");
+int register_table::assign_registers(const int size) {
     if (free_registers.empty()) {
-        throw std::runtime_error("ERROR: OUT OF REGISTERS");
+        throw std::runtime_error("MEMORY ERROR: OUT OF REGISTERS");
     }
-
-    const auto it = free_registers.begin();
-    const auto reg = it->first;
-
-    if (it->first + 1 < it->second) {
-        free_registers.insert(std::make_pair(it->first + 1, it->second));
-    }
-    free_registers.erase(it);
+    std::cout << "assignment size: "<<size<<std::endl<<"free regs before oparation:" << std::endl;
     for (const auto& [first, last] : free_registers) {
-        printf("free regs : from %lld to %lld\n", first, last);
+        printf("from %lld to %lld\n", first, last);
+    }
+
+    auto it = free_registers.begin();
+    const auto end = free_registers.end();
+    while (it != end && it->second - it->first < size) {
+        ++it;
+        if (it == free_registers.begin())
+            throw std::runtime_error("ure bad programmer.");
+    }
+    if (it == end) {
+        throw std::runtime_error("FRAGMENTATION FAULT: OUT OF REGISTERS");
+    }
+    const auto reg = it->first;
+    free_registers.erase(it);
+    if (it->second - it->first > size) {
+        const auto chopped_range = std::make_pair(it->first + size, it->second);
+        free_registers.insert(chopped_range);
+    }
+
+    std::cout << "free regs after oparation:" << std::endl;
+    for (const auto& [first, last] : free_registers) {
+        printf("from %lld to %lld\n", first, last);
     }
     return reg;
 }
@@ -184,7 +200,7 @@ int register_table::add(const std::string& pid) {
 
     pid_type new_pid;
     new_pid.size = 1;
-    new_pid.register_no = available_register();
+    new_pid.register_no = assign_register();
 
     table[pid] = new_pid;
     return new_pid.register_no;
@@ -193,7 +209,7 @@ int register_table::add(const std::string& pid) {
 int register_table::add() { // WARNING IT NEVER FREES THE REGISTER
     pid_type new_pid;
     new_pid.size = 1;
-    new_pid.register_no = available_register();
+    new_pid.register_no = assign_register();
 
     return new_pid.register_no;
 }
@@ -205,12 +221,12 @@ int register_table::add_table(const std::string &pid, const int from, const int 
     } //TODO it was simply commented out you need to handle it in the parser tho
 
     pid_type new_pid;
-    new_pid.size = to - from;
+    new_pid.size = to - from + 1;
     new_pid.index_shift = from;
-    new_pid.register_no = available_registers(new_pid.size);
+    new_pid.register_no = assign_registers(new_pid.size);
     if (new_pid.size <= 0) {
         throw std::invalid_argument("this program cannot declare insideout tables!");
-    };
+    }
     table[pid] = new_pid;
 
     return new_pid.register_no;

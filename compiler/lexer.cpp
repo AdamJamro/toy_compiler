@@ -522,10 +522,11 @@ extern int yylex();
 extern int my_yylext();
 extern int yylineno;
 
+extern void yyerror(const char*);
 extern register_table regs;
 
-#line 528 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
 #line 529 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
+#line 530 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
 
 #define INITIAL 0
 
@@ -742,10 +743,10 @@ YY_DECL
 		}
 
 	{
-#line 22 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 23 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 
 
-#line 749 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
+#line 750 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -804,212 +805,212 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 24 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 25 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return BEGIN_KW; }
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 25 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 26 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return PROGRAM; }
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 26 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 27 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return PROCEDURE; }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 27 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 28 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return IS; }
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 28 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 29 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return END; }
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 29 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 30 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return IF; }
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 30 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 31 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return THEN; }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 31 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 32 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ELSE; }
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 32 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 33 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ENDIF; }
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 33 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 34 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return WHILE; }
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 34 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 35 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return DO; }
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 35 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 36 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ENDWHILE; }
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 36 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 37 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return FOR; }
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 37 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 38 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return FROM; }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 38 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 39 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return TO; }
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 39 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 40 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return DOWNTO; }
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 40 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 41 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ENDFOR; }
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 41 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 42 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return REPEAT; }
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 42 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 43 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return UNTIL; }
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 43 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 44 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return T; }
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 44 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 45 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return WRITE; }
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 45 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 46 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return READ; }
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 47 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 48 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '+'; }
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 49 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 50 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '-'; }
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 51 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 52 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '*'; }
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 53 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 54 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '/'; }
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 55 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 56 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '%'; }
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 57 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 58 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '['; }
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 59 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 60 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ']'; }
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 61 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 62 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '('; }
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 63 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 64 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ')'; }
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 65 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 66 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ';'; }
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 67 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 68 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ':'; }
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 69 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 70 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ','; }
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 71 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 72 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return ASSIGNMENT; }
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 73 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 74 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '='; }
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 75 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 76 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '<'; }
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 77 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 78 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return '>'; }
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 79 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 80 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return NEQ; }
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 81 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 82 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return GEQ; }
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 83 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 84 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { return LEQ; }
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 85 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 86 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 {
                     //yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
                     yylval.attr = new TokenAttribute();
@@ -1023,7 +1024,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 96 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 97 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 {
                     //yylval.attr = static_cast<TokenAttribute*>(malloc(sizeof(TokenAttribute)));
                     yylval.attr = new TokenAttribute();
@@ -1038,7 +1039,7 @@ YY_RULE_SETUP
 case 44:
 /* rule 44 can match eol */
 YY_RULE_SETUP
-#line 107 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 108 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 ;
 	YY_BREAK
 case 45:
@@ -1046,36 +1047,36 @@ case 45:
 (yy_c_buf_p) = yy_cp -= 1;
 YY_DO_BEFORE_ACTION; /* set up yytext again */
 YY_RULE_SETUP
-#line 108 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 109 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 ;
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 109 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 110 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 ;
 	YY_BREAK
 case 47:
 /* rule 47 can match eol */
 YY_RULE_SETUP
-#line 110 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 111 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { yylineno++; }
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 111 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 112 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { /*"some random doubled space somebody thought up to throw into space inside a text file because why not"*/ }
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
-#line 112 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 113 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 { std::cout << "unexpected lexem: " << yytext << std::endl; }
 	YY_BREAK
 case 50:
 YY_RULE_SETUP
-#line 114 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 115 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 ECHO;
 	YY_BREAK
-#line 1079 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
+#line 1080 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/cmake-build-debug/../compiler/lexer.cpp"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -2080,7 +2081,7 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 114 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
+#line 115 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/lexer.l"
 
 
 int yywrap() {
