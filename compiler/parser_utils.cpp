@@ -29,7 +29,9 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
         } else if (other_token->type == LONG) {
             // adr_token already put its addres in r0
             adr_token->translation.emplace_back("LOADI 0");
-            adr_token->translation.emplace_back("SUB [" + std::to_string(other_token->long_value) + "]"); // todo notify main about new cached const?
+            if (other_token->long_value != 0) {
+                adr_token->translation.emplace_back("SUB [" + std::to_string(other_token->long_value) + "]"); // todo notify main about new cached const?
+            }
             token1->translation = adr_token->translation;
         } else {
             throw std::invalid_argument("invalid token type");
@@ -52,17 +54,23 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
     } else {
         // PID ? rVAL
         // we need to put rvalue on the left side of the condition
-        const bool swap_needed = token1->type == STRING;
+        bool swap_needed = token1->type == STRING;
+
+        auto const * const str_token = swap_needed? token1 : token2;
+        auto const * const rval_token = swap_needed? token2 : token1;
+
+        if (rval_token->long_value != 0) {
+            token1->translation.emplace_back("SET " + std::to_string(rval_token->long_value));
+            token1->translation.emplace_back("SUB " + std::to_string(str_token->register_no));
+        } else {
+            swap_needed = !swap_needed;
+            token1->translation.emplace_back("LOAD " + std::to_string(str_token->register_no));
+        }
+
         if (swap_needed) {
             // swap was needed -> so we need to swap logic;
             condition_translation = inverse_condition_translation;
         }
-        auto const * const str_token = swap_needed? token1 : token2;
-        auto const * const rval_token = swap_needed? token2 : token1;
-
-        token1->translation.emplace_back("SET " + std::to_string(rval_token->long_value));
-        token1->translation.emplace_back("SUB " + std::to_string(str_token->register_no));
-
         token1->type = STRING;
     }
 

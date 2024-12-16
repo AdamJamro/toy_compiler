@@ -70,17 +70,34 @@ set<long> cached_constants = {};
 program_all:
     procedures main {
             const auto& main_block = $2->translation;
-            // TODO UNCOMMENT LINES BELLOW:
+
+            // TODO uncomment:
+            // list<long> cache_regs = regs.unused_registers(cached_constants.size()) // outputs registers never yet returned by any add/assign method
+            // cache_register = cache_regs.begin()
+            for (auto const constant : cached_constants) { // TODO postprocessing
+                output_file << "SET " << constant << endl;
+                //regs.add(to_string(constant), cache_register);
+                output_file << "STORE [" << constant << "]" << endl;
+                // output_file << "STORE " << regs.at(to_string(constant)) << endl;
+            }
+
+            // TODO UNCOMMENT LINES BELLOW: (procedures)
             //const auto& procedures_block = $1->translation;
             //output_file << "JMP " << procedures_block.size(); << endl;
             //for (const auto& line : procedures_block) {
             //    output_file << line << endl;
             //}
-            for (auto const constant : cached_constants) { // TODO postprocessing
-                output_file << "SET " << constant << endl;
-                output_file << "STORE [" << constant << "]" << endl;
-            }
+
             for (const auto& line : main_block) {
+                if (line.find("SET") != string::npos) {
+                    const auto rvalue = line.substr(4, line.length());
+                    if (cached_constants.contains(stol(rvalue))) {
+                        output_file << "SET [" << rvalue << "]" << endl;
+                        //TODO replace by:
+                        //output_file << "SET [" << regs.at(rvalue) << "]" << endl;
+                        continue;
+                    }
+                }
                 output_file << line << endl;
             }
             output_file << "HALT" << endl;
@@ -154,7 +171,7 @@ command:
 
                 $6->translation.front().append("\t# else (cond false) block");
                 $$->translation.splice($$->translation.end(), $6->translation); // paste else block
-            } else { // condition is an rval
+            } else { // condition is an rval and is evaluated at compile-time
                 if($2->long_value == 0) {
                     $$->translation = $4->translation; // just the if block
                 } else {
@@ -184,7 +201,7 @@ command:
             $$ = $2;
             if ($2->type == STRING) { //it's lval
                 $2->translation.front().append("\t# while-do head");
-                $$->translation.back().append(" " + to_string($4->translation.size() + 2));
+                $$->translation.back().append(" " + to_string($4->translation.size() + 2)); // navigate case where condition is not true
 
                 $4->translation.front().append("\t# while commands block");
                 $$->translation.splice($$->translation.end(), $4->translation);
