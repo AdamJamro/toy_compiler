@@ -8,6 +8,56 @@
 #include <unordered_set>
 #include <utility>
 
+TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2, const std::string& operation, const std::string& reverse_operation, const long value, const long tmp_reg) {
+    if (token1->type == ADDRESS || token2->type == ADDRESS) {
+        const auto swap = token1->type != ADDRESS;
+        auto * const adr_token = swap ? token2 : token1;
+        auto * const other_token = swap ? token1 : token2;
+        adr_token->translation.emplace_back("LOADI 0");
+
+        if (other_token->type == ADDRESS) {
+            // 1st address already in r0
+            adr_token->translation.emplace_back("STORE " + std::to_string(tmp_reg));
+            adr_token->translation.splice(adr_token->translation.end(), other_token->translation);
+            adr_token->translation.emplace_back("LOADI 0");
+            adr_token->translation.emplace_back(swap ? reverse_operation : operation + " " + std::to_string(tmp_reg));
+        } else if (other_token->type == STRING) {
+            adr_token->translation.emplace_back(operation +  " " + std::to_string(other_token->register_no));
+        } else if (other_token->type == LONG) {
+            adr_token->translation.emplace_back(operation + " [" + std::to_string(other_token->long_value) + "]");
+        } else {
+            throw std::invalid_argument("invalid value type inside of expression");
+        }
+        token1 = adr_token; // free token2 reuse token1 and return it
+        free(other_token);
+    } else if (token1->type == token2->type) {
+        if (token1->type == STRING) {
+            // PID .. PID
+            token1->translation.emplace_back("LOAD " + std::to_string(token1->register_no));
+            token1->translation.emplace_back(operation + " " + std::to_string(token2->register_no));
+        } else {
+            // RVAL .. RVAL
+            token1->translation.emplace_back("SET " + std::to_string(value));
+        }
+        free(token2);
+    } else {
+        // RVAL + PID
+        const auto swap = token1->type == STRING;
+        TokenAttribute* str_token = swap ? token1 : token2;
+        TokenAttribute* num_token = swap ? token2 : token1;
+
+        str_token->translation.emplace_back("SET " + std::to_string(num_token->long_value));
+        str_token->translation.emplace_back("ADD " + std::to_string(str_token->register_no));
+        token1 = str_token; // ensure $$ has the rval register and string type
+        free(num_token);
+    }
+
+    token1->str_value = "rval"; // TODO it may be useless
+    token1->register_no = 0; // RESULT OF THE EXPRESSION STORED IN R0!
+    return token1;
+    //EXCESS TOKEN ALREADY CLEANED UP!
+}
+
 TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, std::list<std::string> condition_translation, const std::list<std::string> &inverse_condition_translation, const bool logic_value, const int tmp_register, const int lineno) {
 
     if (token1->type == ADDRESS || token2->type == ADDRESS) {

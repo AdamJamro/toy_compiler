@@ -24,7 +24,8 @@ extern int my_yylex();
 using namespace std;
 
 register_table regs;
-set<long> cached_constants = {};
+unordered_set<long> cached_constants = {};
+unordered_set<long> constants = {};
 
 %}
 
@@ -44,7 +45,7 @@ set<long> cached_constants = {};
         int lineno;
     } TokenAttribute;
     enum attributetype {
-        INTEGER=0,
+        INTEGER=0, // TODO: delete int
         STRING=1,
         LONG=2,
         ADDRESS=3
@@ -89,18 +90,19 @@ program_all:
             //}
 
             for (const auto& line : main_block) {
-                if (line.find("SET") != string::npos) {
-                    const auto rvalue = line.substr(4, line.length());
+                if (line.find("SET") != string::npos && line.find("[") == string::npos) {
+                    const auto rvalue = line.substr(4, line.find("#") == string::npos ? line.length() : line.find("#"));
+                    cout << "value: " << rvalue << "; count: " << cached_constants.count(stol(rvalue))  << endl;
                     if (cached_constants.contains(stol(rvalue))) {
-                        output_file << "SET [" << rvalue << "]" << endl;
+                        output_file << "LOAD [" << rvalue << "]" << line.substr(4 + rvalue.length(), line.length()) << endl;
                         //TODO replace by:
-                        //output_file << "SET [" << regs.at(rvalue) << "]" << endl;
+                        //output_file << "LOAD [" << regs.at(rvalue) << "]" << endl;
                         continue;
                     }
                 }
                 output_file << line << endl;
             }
-            output_file << "HALT" << endl;
+            output_file << "HALT";
             free($2);
         }
     ;
@@ -155,7 +157,7 @@ command:
                 }
             } else {
                 // expression value already in r0!
-                $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value);
+                $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value + ((regs.get_pid($1->str_value).size > 1) ? ("[" + to_string($1->register_no - regs.at($1->str_value) + regs.get_pid($1->str_value).index_shift) + "]") : ""));
             }
             free($1);
         }
@@ -454,19 +456,70 @@ args:
     | pidentifier
     ;
 
-expression:
+expression: // simply puts result into r0
     value {
             $$ = $1;
             if ($1->type == STRING) {
                 $$->translation = {"LOAD " + to_string($1->register_no)};
-            } else {
+            } else if ($1->type == LONG) {
+                if (constants.contains($1->long_value)) {
+                    cached_constants.insert($1->long_value);
+                } else {
+                    constants.insert($1->long_value);
+                }
                 $$->translation = {"SET " + to_string($1->long_value)};
+            } else if ($1->type == ADDRESS) {
+                $$->translation = {"LOADI 0"};
+                $$->type = STRING; // treat as string TODO: it may be useless
+            } else {
+                yyerror("value has invalid type");
             }
         }
     | value '+' value {
-            //int tmp_reg = regs.add_rval(); TODO DELETE
+            const auto val = $1->long_value + $3->long_value;
 
-            if ($1->type == $3->type) {
+            // TODO refactor:
+            if($1->type == LONG || $3->type == LONG) {
+                long new_constant;
+                if ($1->type == LONG && $3->type == LONG) {
+                    new_constant = val;
+                } else if ($1->type == LONG) {
+                    new_constant = $1->long_value;
+                } else if ($3->type == LONG) {
+                    new_constant = $3->long_value;
+                }
+                if (constants.contains(new_constant)) {
+                    cached_constants.insert(new_constant);
+                } else {
+                    constants.insert(new_constant);
+                }
+            }
+
+            $$ = parse_expression($1, $3, "ADD", "ADD", val, regs.add_rval());
+
+            /* todo delete:
+            if ($1->type == ADDRESS || $3->type == ADDRESS) {
+                auto swap = $1->type != ADDRESS;
+                auto * const adr_token = swap ? $3 : $1;
+                auto * const other_token = swap ? $1 : $3;
+                $$ = address_token; // 1st address already in r0
+                $$->translation.emplace_back("LOADI 0");
+
+                if (other_token->type == ADDRESS) {
+                    const auto tmp_reg = regs.add_rval();
+                    $$->translation.emplace_back("STORE " + to_string(tmp_reg));
+                    $$->translation.splice($$->translation.end(), other_token->translation);
+                    $$->translation.emplace_back("LOADI 0");
+                    $$->translation.emplace_back("ADD " + to_string(tmp_reg));
+                } else if (other_token->type == STRING) {
+                    $$->translation.emplace_back("ADD " + to_string(other_token->register_no);
+                } else if (other_token->type == LONG) {
+                    $$->translation.emplace_back("ADD [" + to_string(other_token->long_value) + "]");
+                } else {
+                    yyerror("invalid value type inside of expression");
+                }
+                free(other_token);
+            } else if ($1->type == $3->type) {
                 $$ = $1;
                 if ($1->type == STRING) {
                     // PID + PID
@@ -499,6 +552,7 @@ expression:
             $$->str_value = "rval";
             $$->register_no = 0; // RESULT OF THE EXPRESSION STORED IN R0!
             //EXCESS TOKEN ALREADY CLEANED UP!
+            */
         }
     | value '-' value   {throw std::runtime_error("NOT IMPLEMENTED");}
     | value '*' value   {throw std::runtime_error("NOT IMPLEMENTED");}
@@ -506,7 +560,7 @@ expression:
     | value '%' value   {throw std::runtime_error("NOT IMPLEMENTED");}
     ;
 
-condition:
+condition: // evaluates condition and leaves a blank jump to a "else" clause (specified one step up the parse tree)
     value '=' value { //EXCESS TOKEN ALREADY CLEANED UP!
             $$ = parse_condition(
                 $1, $3,
@@ -574,7 +628,7 @@ value:
     NUMBER {
             $$ = $1;
             //$$->str_value = "rval";
-            //$$->type = LONG;
+            $$->type = LONG;
         }
     | identifier {
             $$ = $1;
@@ -612,8 +666,12 @@ identifier:
     | pidentifier '[' pidentifier ']' {
             $$ = $1;
             const auto tab_offset = regs.at($1->str_value) - regs.get_pid($1->str_value).index_shift;
-            cached_constants.insert(tab_offset); // cache offset
-            $$->translation.emplace_back("LOAD [" + to_string(tab_offset) + "]"); // we know exact location where the table begin!
+            if (constants.contains(tab_offset)) {
+                cached_constants.insert(tab_offset);
+            } else {
+                constants.insert(tab_offset);
+            } //TODO maybe create a dedicated data structure
+            $$->translation.emplace_back("SET " + to_string(tab_offset));
             $$->translation.emplace_back("ADD " + to_string(regs.at($3->str_value)));
             $$->type = ADDRESS;
             $$->lineno = yylineno;

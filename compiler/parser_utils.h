@@ -20,6 +20,7 @@
 //     }
 // };
 
+TokenAttribute* parse_expression(TokenAttribute*, TokenAttribute*, const std::string&, const std::string&, long, long);
 TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, bool, int, int);
 
 struct CompareFirstPairEntry {

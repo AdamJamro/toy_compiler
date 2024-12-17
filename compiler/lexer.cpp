@@ -2091,8 +2091,8 @@ int yywrap() {
 
 int my_yylex() {
     int token = yylex();
-    printf("TokenID: %d;\t", token);
-    //std::cout << "Token: \"" << (yytext ? yytext : "UNKNOWN") << "\"" << std::endl;
-    printf("Token: \"%s\"\n", yytext ? yytext : "UNKNOWN");
+    //printf("TokenID: %d;\t", token);
+    // //std::cout << "Token: \"" << (yytext ? yytext : "UNKNOWN") << "\"" << std::endl;
+    //printf("Token: \"%s\"\n", yytext ? yytext : "UNKNOWN");
     return token;
 }
