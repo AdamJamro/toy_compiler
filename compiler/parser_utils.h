@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+
 #include "parser.h"
 
 // struct PairHash {
@@ -21,7 +23,7 @@
 // };
 
 TokenAttribute* parse_expression(TokenAttribute*, TokenAttribute*, const std::string&, const std::string&, long, long);
-TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, bool, int, int);
+TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, bool, int, int, std::unordered_set<long>&);
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {

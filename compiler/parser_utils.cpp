@@ -9,6 +9,9 @@
 #include <utility>
 
 TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2, const std::string& operation, const std::string& reverse_operation, const long value, const long tmp_reg) {
+    // TODO probably reverse_operation is not required for parsing expression
+    // TODO cache constants
+
     if (token1->type == ADDRESS || token2->type == ADDRESS) {
         const auto swap = token1->type != ADDRESS;
         auto * const adr_token = swap ? token2 : token1;
@@ -16,14 +19,17 @@ TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2,
         adr_token->translation.emplace_back("LOADI 0");
 
         if (other_token->type == ADDRESS) {
+            // ADDRESS .. ADDRESS
             // 1st address already in r0
             adr_token->translation.emplace_back("STORE " + std::to_string(tmp_reg));
             adr_token->translation.splice(adr_token->translation.end(), other_token->translation);
             adr_token->translation.emplace_back("LOADI 0");
-            adr_token->translation.emplace_back(swap ? reverse_operation : operation + " " + std::to_string(tmp_reg));
+            adr_token->translation.emplace_back((swap ? reverse_operation : operation) + " " + std::to_string(tmp_reg));
         } else if (other_token->type == STRING) {
+            // ADDRESS .. PID
             adr_token->translation.emplace_back(operation +  " " + std::to_string(other_token->register_no));
         } else if (other_token->type == LONG) {
+            // ADDRESS .. RVAL
             adr_token->translation.emplace_back(operation + " [" + std::to_string(other_token->long_value) + "]");
         } else {
             throw std::invalid_argument("invalid value type inside of expression");
@@ -58,10 +64,10 @@ TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2,
     //EXCESS TOKEN ALREADY CLEANED UP!
 }
 
-TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, std::list<std::string> condition_translation, const std::list<std::string> &inverse_condition_translation, const bool logic_value, const int tmp_register, const int lineno) {
+TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, std::list<std::string> condition_translation, const std::list<std::string> &inverse_condition_translation, const bool logic_value, const int tmp_register, const int lineno, std::unordered_set<long>& cached_constants) {
 
     if (token1->type == ADDRESS || token2->type == ADDRESS) {
-        auto swap = token1->type != ADDRESS;
+        const auto swap = token1->type != ADDRESS;
         auto * const adr_token = swap ? token2 : token1;
         auto * const other_token = swap ? token1 : token2;
 
@@ -110,8 +116,9 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
         auto const * const rval_token = swap_needed? token2 : token1;
 
         if (rval_token->long_value != 0) {
-            token1->translation.emplace_back("SET " + std::to_string(rval_token->long_value));
+            token1->translation.emplace_back("SET [" + std::to_string(rval_token->long_value) + "]");
             token1->translation.emplace_back("SUB " + std::to_string(str_token->register_no));
+            cached_constants.insert(rval_token->long_value);
         } else {
             swap_needed = !swap_needed;
             token1->translation.emplace_back("LOAD " + std::to_string(str_token->register_no));
@@ -135,6 +142,7 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
 int register_table::assign_register() {
     return assign_registers(1);
 
+    // deprecated
     if (free_registers.empty()) {
         throw std::runtime_error("ERROR OUT OF REGISTERS");
     }
@@ -185,7 +193,9 @@ int register_table::assign_registers(const int size) {
 }
 
 register_table::register_table() : free_registers(), table() {
-    free_registers.insert(std::make_pair(1,2<<29));
+    free_registers.insert(std::make_pair(2,2<<29));
+    // r0 is used as a special temporary register
+    // r1 is used to store the line_no to return to from a function
 }
 
 void register_table::remove(const std::string& pid) { // maybe free_pid() ?

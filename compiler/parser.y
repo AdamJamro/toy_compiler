@@ -24,8 +24,10 @@ extern int my_yylex();
 using namespace std;
 
 register_table regs;
+
+//TODO MAKE IT REGULAR SET:
 unordered_set<long> cached_constants = {};
-unordered_set<long> constants = {};
+//unordered_set<long> constants = {};
 
 %}
 
@@ -75,7 +77,7 @@ program_all:
             // TODO uncomment:
             // list<long> cache_regs = regs.unused_registers(cached_constants.size()) // outputs registers never yet returned by any add/assign method
             // cache_register = cache_regs.begin()
-            for (auto const constant : cached_constants) { // TODO postprocessing
+            for (auto const constant : cached_constants) { // TODO ENHANCE postprocessing HERE
                 output_file << "SET " << constant << endl;
                 //regs.add(to_string(constant), cache_register);
                 output_file << "STORE [" << constant << "]" << endl;
@@ -271,29 +273,32 @@ command:
             }
 
             // create for_head
-            string CONDITIONAL_JUMP; // remember if we did v1 - v2 or v2 - v1 to decide when to stop the loop in the footer
+            string CONDITIONAL_JUMP; // used to remember if we did v1 - v2 or v2 - v1 to decide when to stop the loop in the footer
             list<string> for_head;
             list<string> for_footer;
             if ($4->type == LONG && $6->type == LONG) { // SPECIAL CASE [rVAL, rVAL] can be optimized like:
                 for_head = {
-                    "SET " + to_string($4->long_value - $6->long_value), // store only one value v == v1-v2 <= 0
+                    "SET [" + to_string($4->long_value - $6->long_value) + "]", // store only one value v == v1-v2 <= 0
                     "STORE " + to_string(tid_register),
                 };
                 CONDITIONAL_JUMP = "JPOS";
+                cached_constants.insert($4->long_value - $6->long_value);
             } else if ($4->type == LONG && $6->type == STRING) {
                 for_head = {
-                    "SET "  + to_string($4->long_value),
+                    "SET [" + to_string($4->long_value) + "]",
                     "SUB "  + to_string($6->register_no),
                     "STORE "+ to_string(tid_register),
                 };
                 CONDITIONAL_JUMP = "JPOS";
+                cached_constants.insert($4->long_value);
             } else if ($4->type == STRING && $6->type == LONG) {
                 for_head = {
-                    "SET "  + to_string($6->long_value),
+                    "SET [" + to_string($6->long_value) + "]",
                     "SUB "  + to_string($4->register_no),
                     "STORE "+ to_string(tid_register),
                 };
                 CONDITIONAL_JUMP = "JNEG";
+                cached_constants.insert($6->long_value);
             } else if ($4->type == STRING && $6->type == STRING) {
                 for_head = {
                     "LOAD " + to_string($6->register_no),
@@ -378,14 +383,38 @@ command:
     | proc_call ';'
     | READ identifier ';' {
             $$ = $2;
-            $$->translation.emplace_back("GET " + to_string($2->register_no));
+            if ($2->type == ADDRESS) {
+                const auto tmp_reg = regs.add_rval();
+                // store the address to tmp_reg
+                $$->translation.emplace_back("STORE " + to_string(tmp_reg));
+                // load the value into r0
+                $$->translation.emplace_back("GET 0");
+                // store it where the tmp address points to
+                $$->translation.emplace_back("STOREI " + to_string(tmp_reg));
+            } else { // STRING or LONG
+                // if it was a long then register_no is expected be 0
+                $$->translation.emplace_back("GET " + to_string($2->register_no));
+            }
+
+            // Deprecated:
+            //$$ = $2;
+            //$$->translation.emplace_back("GET " + to_string($2->register_no));
         }
     | WRITE value ';' {
             $$ = $2;
-            if ($2->type != STRING) {
-                $$->translation.emplace_back("SET " + to_string($2->long_value));
+            if ($2->type == LONG) {
+                $$->translation.emplace_back("SET [" + to_string($2->long_value) + "]");
                 $2->register_no = 0;
+                cached_constants.insert($2->long_value);
+            } else if ($2->type == STRING) {
+                // $2 already sets its value to r0
+            } else if ($2->type == ADDRESS) {
+                $$->translation.emplace_back("LOADI 0");
+                $2->register_no = 0;
+            } else {
+                yyerror("invalid value type in WRITE operation");
             }
+
             $$->translation.emplace_back("PUT " + to_string($2->register_no));
         }
     ;
@@ -462,15 +491,11 @@ expression: // simply puts result into r0
             if ($1->type == STRING) {
                 $$->translation = {"LOAD " + to_string($1->register_no)};
             } else if ($1->type == LONG) {
-                if (constants.contains($1->long_value)) {
-                    cached_constants.insert($1->long_value);
-                } else {
-                    constants.insert($1->long_value);
-                }
+                cached_constants.insert($1->long_value); // missed optimization if constant is used only once and only in main outside of any loop
                 $$->translation = {"SET " + to_string($1->long_value)};
             } else if ($1->type == ADDRESS) {
                 $$->translation = {"LOADI 0"};
-                $$->type = STRING; // treat as string TODO: it may be useless
+                $$->type = STRING; // treat as string TODO: it may turn out useless
             } else {
                 yyerror("value has invalid type");
             }
@@ -478,7 +503,7 @@ expression: // simply puts result into r0
     | value '+' value {
             const auto val = $1->long_value + $3->long_value;
 
-            // TODO refactor:
+            // TODO refactor (maybe pass a reference to cached_constants to parse_expression):
             if($1->type == LONG || $3->type == LONG) {
                 long new_constant;
                 if ($1->type == LONG && $3->type == LONG) {
@@ -488,11 +513,7 @@ expression: // simply puts result into r0
                 } else if ($3->type == LONG) {
                     new_constant = $3->long_value;
                 }
-                if (constants.contains(new_constant)) {
-                    cached_constants.insert(new_constant);
-                } else {
-                    constants.insert(new_constant);
-                }
+                cached_constants.insert(new_constant); // missed optimization
             }
 
             $$ = parse_expression($1, $3, "ADD", "ADD", val, regs.add_rval());
@@ -561,13 +582,14 @@ expression: // simply puts result into r0
     ;
 
 condition: // evaluates condition and leaves a blank jump to a "else" clause (specified one step up the parse tree)
-    value '=' value { //EXCESS TOKEN ALREADY CLEANED UP!
+    value '=' value { //EXCESS TOKEN ALREADY CLEANED UP BY PARSE FUNCTION!
             $$ = parse_condition(
                 $1, $3,
                 list<string>({"JZERO 2", "JUMP"}), list<string>({"JZERO 2", "JUMP"}),
                 ($1->long_value == $3->long_value),
                 regs.add_rval(),
-                yylineno
+                yylineno,
+                cached_constants
             );
             // store an inverse jump (a weird somersault for smaller repeat-until loops)
             $$->str_value = "JZERO";
@@ -578,7 +600,8 @@ condition: // evaluates condition and leaves a blank jump to a "else" clause (sp
                 list<string>({"JZERO"}), list<string>({"JZERO"}),
                 ($1->long_value != $3->long_value),
                 regs.add_rval(),
-                yylineno
+                yylineno,
+                cached_constants
             );
             $$->str_value = "JZERO 2\nJUMP";
         }
@@ -588,7 +611,8 @@ condition: // evaluates condition and leaves a blank jump to a "else" clause (sp
                 list<string>({"JPOS 2", "JUMP"}), list<string>({"JNEG 2", "JUMP"}),
                 ($1->long_value > $3->long_value),
                 regs.add_rval(),
-                yylineno
+                yylineno,
+                cached_constants
             );
             $$->str_value = "JPOS";
         }
@@ -598,7 +622,8 @@ condition: // evaluates condition and leaves a blank jump to a "else" clause (sp
                 list<string>({"JNEG 2", "JUMP"}), list<string>({"JPOS 2", "JUMP"}),
                 ($1->long_value < $3->long_value),
                 regs.add_rval(),
-                yylineno
+                yylineno,
+                cached_constants
             );
             $$->str_value = "JNEG";
         }
@@ -608,7 +633,8 @@ condition: // evaluates condition and leaves a blank jump to a "else" clause (sp
                 list<string>({"JNEG"}), list<string>({"JPOS"}),
                 ($1->long_value >= $3->long_value),
                 regs.add_rval(),
-                yylineno
+                yylineno,
+                cached_constants
             );
             $$->str_value = "JNEG 2\nJUMP";
         }
@@ -618,7 +644,8 @@ condition: // evaluates condition and leaves a blank jump to a "else" clause (sp
                 list<string>({"JPOS"}), list<string>({"JNEG"}),
                 ($1->long_value > $3->long_value),
                 regs.add_rval(),
-                yylineno
+                yylineno,
+                cached_constants
             );
             $$->str_value = "JPOS 2\nJUMP";
         }
@@ -666,11 +693,7 @@ identifier:
     | pidentifier '[' pidentifier ']' {
             $$ = $1;
             const auto tab_offset = regs.at($1->str_value) - regs.get_pid($1->str_value).index_shift;
-            if (constants.contains(tab_offset)) {
-                cached_constants.insert(tab_offset);
-            } else {
-                constants.insert(tab_offset);
-            } //TODO maybe create a dedicated data structure
+            cached_constants.insert(tab_offset);    // missed optimization
             $$->translation.emplace_back("SET " + to_string(tab_offset));
             $$->translation.emplace_back("ADD " + to_string(regs.at($3->str_value)));
             $$->type = ADDRESS;
