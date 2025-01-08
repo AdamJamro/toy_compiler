@@ -138,6 +138,25 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
     return token1;
 }
 
+//FUNS_TABLE
+void funs_table::add(const std::string &fun_name, long line_no, long amount_of_arguments, long first_reg) {
+    line_no_of_[fun_name] = line_no;
+    arg_count_of_[fun_name] = amount_of_arguments;
+    first_arg_register_of_[fun_name] = first_reg;
+}
+
+long funs_table::get_line_no(const std::string &fun_name) const {
+    return line_no_of_.at(fun_name);
+}
+
+long funs_table::get_arg_count(const std::string &fun_name) const {
+    return arg_count_of_.at(fun_name);
+}
+
+long funs_table::get_first_arg_register(const std::string &fun_name) const {
+    return first_arg_register_of_.at(fun_name);
+}
+
 //REGISTER_TABLE
 int register_table::assign_register() {
     return assign_registers(1);
@@ -228,10 +247,10 @@ void register_table::remove(const std::string& pid) { // maybe free_pid() ?
 
     table.erase(pid);
 
-    std::cout << "free regs after remove pid:" << pid <<" : " << std::endl ;
-    for (const auto& [first, last] : free_registers) {
-        printf("regs : from %lld to %lld\n", first, last);
-    }
+    // std::cout << "free regs after remove pid:" << pid <<" : " << std::endl ;
+    // for (const auto& [first, last] : free_registers) {
+    //     printf("regs : from %lld to %lld\n", first, last);
+    // }
 }
 
 void register_table::remove(const int reg) { // maybe free_pid() ?
@@ -243,7 +262,7 @@ void register_table::remove(const int reg) { // maybe free_pid() ?
     lower_bound = lower_bound == free_registers.begin()? lower_bound : --lower_bound;
     const auto upper_bound = free_registers.upper_bound(range);
 
-    std::cout << "hitched at: Lb.1: " << lower_bound->first << ", Lb.2: " << lower_bound->second <<", Ub.1: " << upper_bound->first <<", Ub.2: " <<upper_bound->second << std::endl;
+    // std::cout << "hitched at: Lb.1: " << lower_bound->first << ", Lb.2: " << lower_bound->second <<", Ub.1: " << upper_bound->first <<", Ub.2: " <<upper_bound->second << std::endl;
     if (lower_bound->second < reg || reg < upper_bound->first - 1) {
         free_registers.insert(range);
     } else if (lower_bound->second + 1 == upper_bound->first) {
@@ -261,10 +280,15 @@ void register_table::remove(const int reg) { // maybe free_pid() ?
         free_registers.erase(upper_bound);
         free_registers.insert(range);
     }
-    std::cout << "free regs after remove pid:" << reg <<" : " << std::endl ;
-    for (const auto& [first, last] : free_registers) {
-        printf("free regs : from %lld to %lld\n", first, last);
-    }
+    // std::cout << "free regs after remove pid:" << reg <<" : " << std::endl ;
+    // for (const auto& [first, last] : free_registers) {
+    //     printf("free regs : from %lld to %lld\n", first, last);
+    // }
+}
+
+[[maybe_unused]]
+void register_table::forget_pid(const std::string& pid) {
+    table.erase(pid);
 }
 
 int register_table::at(const std::string& pid) const {
@@ -330,4 +354,12 @@ int register_table::add_table(const std::string &pid, const int from, const int 
     table[pid] = new_pid;
 
     return new_pid.register_no;
+}
+
+std::string extract_function_name(const std::string& fun_call) {
+    const size_t pos = fun_call.find('(');
+    if (pos == std::string::npos) {
+        throw std::invalid_argument("wrong number of arguments! \nin function call: " + fun_call);
+    }
+    return fun_call.substr(0, pos);
 }

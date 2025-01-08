@@ -31,6 +31,22 @@ struct CompareFirstPairEntry {
     }
 };
 
+class funs_table {
+private:
+    std::unordered_map<std::string, long> line_no_of_; // (fun_name, line_no)
+    std::unordered_map<std::string, long> arg_count_of_;
+    std::unordered_map<std::string, long> first_arg_register_of_;
+
+public:
+    funs_table() = default;
+
+    void add(const std::string &fun_name, long line_no, long amount_of_arguments, long first_reg);
+    long get_line_no(const std::string& fun_name) const;
+    long get_arg_count(const std::string& fun_name) const;
+
+    long get_first_arg_register(const std::string &fun_name) const;
+};
+
 struct pid_type {
     //auto type = INTEGER (this is a toy compiler)
     int size;
@@ -56,6 +72,8 @@ public:
     void remove(const std::string &pid);
 
     void remove(int reg);
+
+    void forget_pid(const std::string &pid);
 
     int at(const std::string &pid) const;
 

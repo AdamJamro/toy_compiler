@@ -24,6 +24,7 @@ extern int my_yylex();
 using namespace std;
 
 register_table regs;
+funs_table funs; // fun name -> line number
 
 //TODO MAKE IT REGULAR SET:
 unordered_set<long> cached_constants = {};
@@ -60,7 +61,7 @@ unordered_set<long> cached_constants = {};
     TokenAttribute* attr;
 }
 
-%type <attr> identifier tidentifier expression value command commands main condition
+%type <attr> main procedures proc_head proc_call args_decl args identifier tidentifier expression value command commands condition
 %token <attr> NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
 %token BEGIN_KW
@@ -85,14 +86,14 @@ program_all:
             }
 
             // TODO UNCOMMENT LINES BELLOW: (procedures)
-            //const auto& procedures_block = $1->translation;
-            //output_file << "JMP " << procedures_block.size(); << endl;
-            //for (const auto& line : procedures_block) {
-            //    output_file << line << endl;
-            //}
+            const auto& procedures_block = $1->translation;
+            output_file << "JMP " << procedures_block.size() + 1 << endl;
+            for (const auto& line : procedures_block) {
+                output_file << line << endl;
+            }
 
             for (const auto& line : main_block) {
-                if (line.find("SET") != string::npos && line.find("[") == string::npos) {
+                /*if (line.find("SET") != string::npos && line.find("[") == string::npos) {
                     const auto rvalue = line.substr(4, line.find("#") == string::npos ? line.length() : line.find("#"));
                     cout << "value: " << rvalue << "; count: " << cached_constants.count(stol(rvalue))  << endl;
                     if (cached_constants.contains(stol(rvalue))) {
@@ -101,7 +102,7 @@ program_all:
                         //output_file << "LOAD [" << regs.at(rvalue) << "]" << endl;
                         continue;
                     }
-                }
+                }*/ // no clue what this was supposed to do
                 output_file << line << endl;
             }
             output_file << "HALT";
@@ -110,9 +111,53 @@ program_all:
     ;
 
 procedures:
-    procedures PROCEDURE proc_head IS declarations BEGIN_KW commands END { cout << "PROCEDURE" << endl;}
-    | procedures PROCEDURE proc_head IS BEGIN_KW commands END
-    | %empty
+    procedures PROCEDURE proc_head IS declarations BEGIN_KW commands END {
+        const auto& fun_name = $3->str_value;
+        const auto& arguments = $3->translation;
+
+        if (regs.contains(fun_name)){
+            yyerror("procedure's name is ambiguous", yylineno, fun_name);
+        }
+        const auto return_reg = regs.add(fun_name);
+
+        // store procedure's data
+        const auto fun_line_no = $1->translation.size() + 1;
+        const auto first_arg = regs.at(arguments.front());
+        funs.add(fun_name, fun_line_no, arguments.size(), first_arg);
+
+        $$ = $1;
+        $1->translation.splice($1->translation.end(), $7->translation);
+        $$->translation.emplace_back("RTRN " + to_string(return_reg));
+
+        // forget this context after moving to the next procedure
+        for (const auto& pid : arguments) {
+            regs.forget_pid(pid);
+        }
+        // TODO forget regular declarations
+    }
+    | procedures PROCEDURE proc_head IS BEGIN_KW commands END {
+        const auto& fun_name = $3->str_value;
+        const auto& arguments = $3->translation;
+
+        if (regs.contains(fun_name)){
+            yyerror("procedure's name is ambiguous", yylineno, fun_name);
+        }
+        const auto return_reg = regs.add(fun_name);
+
+        // store procedure's data
+        const auto fun_line_no = $1->translation.size() + 1;
+        const auto first_arg = regs.at(arguments.front());
+        funs.add(fun_name, fun_line_no, arguments.size(), first_arg);
+
+        $$ = $1;
+        $1->translation.splice($1->translation.end(), $6->translation);
+
+        $$->translation.emplace_back("RTRN " + to_string(return_reg));
+    }
+    | %empty {
+        $$ = new TokenAttribute();
+        $$->translation = {};
+    }
     ;
 
 main:
@@ -144,7 +189,7 @@ command:
                 output_file << "SET "<< $3->long_value << endl;
             }*/ // <- moved down the parse tree TODO : DELETE THIS
 
-            $$ = $3; // put expression->translation into $$->translation
+            $$ = $3; // put expression->translation into $$->translation to avoid extra copies
 
             if ($1->type == ADDRESS) {
                 if ($1->translation.empty()) { // pid[num] todo DELETE THIS CASE AS TRANSLATION CANNOT BE EMPTY ANYMORE!
@@ -278,14 +323,14 @@ command:
             list<string> for_footer;
             if ($4->type == LONG && $6->type == LONG) { // SPECIAL CASE [rVAL, rVAL] can be optimized like:
                 for_head = {
-                    "SET [" + to_string($4->long_value - $6->long_value) + "]", // store only one value v == v1-v2 <= 0
+                    "LOAD [" + to_string($4->long_value - $6->long_value) + "]", // store only one value v == v1-v2 <= 0
                     "STORE " + to_string(tid_register),
                 };
                 CONDITIONAL_JUMP = "JPOS";
                 cached_constants.insert($4->long_value - $6->long_value);
             } else if ($4->type == LONG && $6->type == STRING) {
                 for_head = {
-                    "SET [" + to_string($4->long_value) + "]",
+                    "LOAD [" + to_string($4->long_value) + "]",
                     "SUB "  + to_string($6->register_no),
                     "STORE "+ to_string(tid_register),
                 };
@@ -293,7 +338,7 @@ command:
                 cached_constants.insert($4->long_value);
             } else if ($4->type == STRING && $6->type == LONG) {
                 for_head = {
-                    "SET [" + to_string($6->long_value) + "]",
+                    "LOAD [" + to_string($6->long_value) + "]",
                     "SUB "  + to_string($4->register_no),
                     "STORE "+ to_string(tid_register),
                 };
@@ -321,17 +366,19 @@ command:
                 for_head = $4->translation;
                 for_head.emplace_back("LOADI 0");
                 for_head.emplace_back("STORE " + to_string(tmp_reg));
-                for_head.emplace_back("SET "   + to_string($6->long_value));
+                for_head.emplace_back("LOAD [" + to_string($6->long_value) + "]");
                 for_head.emplace_back("SUB "   + to_string(tmp_reg));
                 CONDITIONAL_JUMP = "JNEG";
+                cached_constants.insert($6->long_value);
             } else if ($4->type == LONG && $6->type == ADDRESS) {
                 const auto tmp_reg = regs.add_rval();
                 for_head = $6->translation;
                 for_head.emplace_back("LOADI 0");
                 for_head.emplace_back("STORE " + to_string(tmp_reg));
-                for_head.emplace_back("SET "   + to_string($4->long_value));
+                for_head.emplace_back("LOAD [" + to_string($4->long_value) + "]");
                 for_head.emplace_back("SUB "   + to_string(tmp_reg));
                 CONDITIONAL_JUMP = "JPOS";
+                cached_constants.insert($4->long_value);
             } else if ($4->type == ADDRESS && $6->type == STRING) {
                 for_head = {
                     "LOADI 0",
@@ -352,7 +399,7 @@ command:
             for_footer = {
                 "LOAD " + to_string(tid_register),
                 CONDITIONAL_JUMP + " 5", // exit for
-                "ADD [one]",
+                "ADD [1]",
                 "STORE " + to_string(tid_register)
             };
             cached_constants.insert(1);// we need to cache one
@@ -374,13 +421,15 @@ command:
             $$->translation.splice($$->translation.end(), for_footer); // most important part of the loop
 
             //cleanup
-            regs.remove($2->str_value); // regs.remove(tid_register);
+            regs.remove($2->str_value); // SAME AS regs.remove(tid_register);
             free($4);
             free($6);
             free($8);
         }
     | FOR tidentifier FROM value DOWNTO value DO commands ENDFOR
-    | proc_call ';'
+    | proc_call ';' {
+            $$ = $1;
+    }
     | READ identifier ';' {
             $$ = $2;
             if ($2->type == ADDRESS) {
@@ -403,7 +452,7 @@ command:
     | WRITE value ';' {
             $$ = $2;
             if ($2->type == LONG) {
-                $$->translation.emplace_back("SET [" + to_string($2->long_value) + "]");
+                $$->translation.emplace_back("LOAD [" + to_string($2->long_value) + "]");
                 $2->register_no = 0;
                 cached_constants.insert($2->long_value);
             } else if ($2->type == STRING) {
@@ -420,11 +469,49 @@ command:
     ;
 
 proc_head:
-    pidentifier '(' args_decl ')'
+    pidentifier '(' args_decl ')' {
+        $$ = $3; // get translation from args_decl
+        $$->str_value = $1->str_value;
+        free($1);
+    }
     ;
 
 proc_call:
-    pidentifier '(' args ')'
+    pidentifier '(' args ')' {
+        const auto& fun_name = $1->str_value;
+        if (!regs.contains(fun_name)) {
+            yyerror("procedure not declared", yylineno, fun_name);
+        }
+
+        $$ = $1;
+        $$->translation = {};
+
+        auto arg_count = 0;
+        const auto arg_no = funs.get_arg_count(fun_name);
+        const auto first_arg_register = funs.get_first_arg_register(fun_name);
+        for (const auto& pid : $3->translation) {
+            arg_count++;
+            if (arg_count > arg_no) {
+                yyerror("too many arguments in procedure call", yylineno, fun_name);
+            }
+            $$->translation.emplace_back("LOAD [" + to_string(regs.at(pid)) + "]");
+            $$->translation.emplace_back(
+                "STORE " + to_string(first_arg_register + arg_count - 1)
+            );
+            cached_constants.insert(regs.at(pid));
+        }
+        if (arg_count < arg_no) {
+            yyerror("too few arguments in procedure call. expected: " + to_string(arg_no) + ", got: " + to_string(arg_count), yylineno, fun_name);
+        }
+
+        // TODO figure out thie line_no
+        const auto this_line = 101010101010
+        $$->translation.emplace_back("LOAD [" + this_line + 3"]");
+        $$->translation.emplace_back("STORE " + to_string(regs.at(fun_name)));
+        // TODO cached_constants.insert(this_line + 3);
+        $$->translation.emplace_back("JUMP " + to_string(funs.get_line_no(fun_name) + 1 - this_line));
+        free($3);
+    }
     ;
 
 declarations:
@@ -474,27 +561,69 @@ declarations:
         }
 
 args_decl:
-    args_decl ',' pidentifier
-    | args_decl ',' T pidentifier
-    | pidentifier
-    | T pidentifier
+    args_decl ',' pidentifier {
+        const auto& pid = $3->str_value;
+        if (regs.contains(pid)) {
+          yyerror("identifier redeclaration", yylineno-1, pid);
+        }
+        regs.add(pid);
+        $$ = $1;
+        $$->translation.emplace_back(pid);
+        free($3);
+    }
+    | args_decl ',' T pidentifier {
+        const auto& pid = $4->str_value;
+        if (regs.contains(pid)) {
+            yyerror("identifier redeclaration", yylineno-1, pid);
+        }
+        regs.add(pid);
+        $$ = $1;
+        $$->translation.emplace_back(pid);
+        free($4);
+    }
+    | pidentifier {
+        const auto& pid = $1->str_value;
+        if (regs.contains(pid)) {
+          yyerror("identifier redeclaration", yylineno-1, pid);
+        }
+        regs.add(pid);
+        $$ = $1;
+        $$->translation = {pid};
+    }
+    | T pidentifier {
+        const auto& pid = $2->str_value;
+        if (regs.contains(pid)) {
+            yyerror("identifier redeclaration", yylineno-1, pid);
+        }
+        regs.add(pid);
+        $$ = $2;
+        $$->translation = {pid};
+    }
     ;
 
 args:
-    args ',' pidentifier
-    | pidentifier
+    args ',' pidentifier {
+        $$ = $1;
+        $$->translation.emplace_back($3->str_value);
+        free($3);
+    }
+    | pidentifier {
+        $$ = $1;
+        $$->translation = {$1->str_value};
+    }
     ;
 
-expression: // simply puts result into r0
+expression: // simply puts result of the expression into r0
     value {
             $$ = $1;
             if ($1->type == STRING) {
                 $$->translation = {"LOAD " + to_string($1->register_no)};
             } else if ($1->type == LONG) {
                 cached_constants.insert($1->long_value); // missed optimization if constant is used only once and only in main outside of any loop
-                $$->translation = {"SET " + to_string($1->long_value)};
+                $$->translation = {"LOAD [" + to_string($1->long_value) + "]"};
+                cached_constants.insert($1->long_value);
             } else if ($1->type == ADDRESS) {
-                $$->translation = {"LOADI 0"};
+                $$->translation.push_back("LOADI 0");
                 $$->type = STRING; // treat as string TODO: it may turn out useless
             } else {
                 yyerror("value has invalid type");
@@ -549,7 +678,8 @@ expression: // simply puts result into r0
                 } else {
                     // RVAL + RVAL
                     $$->long_value = $1->long_value + $3->long_value;
-                    $$->translation.emplace_back("SET " + to_string($$->long_value));
+                    $$->translation.emplace_back("LOAD [" + to_string($$->long_value) + "]");
+                    cached_constants.insert($$->long_value);
                 }
                 free($3);
             } else {
@@ -565,9 +695,11 @@ expression: // simply puts result into r0
                 }
                 $$ = str_token; // ensure $$ has the rval register and string type
 
-                $$->translation.emplace_back("SET " + to_string(num_token->long_value));
+                $$->translation.emplace_back("LOAD [" + to_string(num_token->long_value) + "]");
+                cached_constants.insert($$->long_value);
                 $$->translation.emplace_back("ADD " + to_string(str_token->register_no));
                 free(num_token);
+
             }
 
             $$->str_value = "rval";
@@ -575,10 +707,27 @@ expression: // simply puts result into r0
             //EXCESS TOKEN ALREADY CLEANED UP!
             */
         }
-    | value '-' value   {throw std::runtime_error("NOT IMPLEMENTED");}
-    | value '*' value   {throw std::runtime_error("NOT IMPLEMENTED");}
-    | value '/' value   {throw std::runtime_error("NOT IMPLEMENTED");}
-    | value '%' value   {throw std::runtime_error("NOT IMPLEMENTED");}
+    | value '-' value {
+          const auto val = $1->long_value - $3->long_value;
+
+          // TODO refactor (maybe pass a reference to cached_constants to parse_expression):
+          if($1->type == LONG || $3->type == LONG) {
+              long new_constant;
+              if ($1->type == LONG && $3->type == LONG) {
+                  new_constant = val;
+              } else if ($1->type == LONG) {
+                  new_constant = $1->long_value;
+              } else if ($3->type == LONG) {
+                  new_constant = $3->long_value;
+              }
+              cached_constants.insert(new_constant); // missed optimization
+          }
+
+          $$ = parse_expression($1, $3, "SUB", "SUB", val, regs.add_rval());
+    }
+    | value '*' value   {throw std::runtime_error("MUL NOT IMPLEMENTED");}
+    | value '/' value   {throw std::runtime_error("DIV NOT IMPLEMENTED");}
+    | value '%' value   {throw std::runtime_error("MOD NOT IMPLEMENTED");}
     ;
 
 condition: // evaluates condition and leaves a blank jump to a "else" clause (specified one step up the parse tree)
@@ -692,10 +841,15 @@ identifier:
         }
     | pidentifier '[' pidentifier ']' {
             $$ = $1;
+            if (!regs.contains($1->str_value)) {
+                yyerror("undefined identifier", yylineno, $1->str_value);
+            }
             const auto tab_offset = regs.at($1->str_value) - regs.get_pid($1->str_value).index_shift;
             cached_constants.insert(tab_offset);    // missed optimization
-            $$->translation.emplace_back("SET " + to_string(tab_offset));
+            $$->translation.emplace_back("LOAD [" + to_string(tab_offset) + "]");
             $$->translation.emplace_back("ADD " + to_string(regs.at($3->str_value)));
+
+            cached_constants.insert(tab_offset);
             $$->type = ADDRESS;
             $$->lineno = yylineno;
             free($3);
