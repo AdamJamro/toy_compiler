@@ -45,7 +45,7 @@
 extern int yydebug;
 #endif
 /* "%code requires" blocks.  */
-#line 35 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 37 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
     #include <string> //TODO consider carefully legitimacy of including something here
     #include <list>
@@ -117,7 +117,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 60 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 62 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
     TokenAttribute* attr;
 

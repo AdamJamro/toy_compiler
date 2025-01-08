@@ -24,6 +24,8 @@
 
 TokenAttribute* parse_expression(TokenAttribute*, TokenAttribute*, const std::string&, const std::string&, long, long);
 TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, bool, int, int, std::unordered_set<long>&);
+void parse_line(std::string&, long, long);
+void parse_proc_line(std::string&, const std::list<long>&);
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {
@@ -53,6 +55,11 @@ struct pid_type {
     int register_no; //first reg occupied by this pid
     int index_shift = 0; // first value from the table range [first, second]
     int at(const int index) const {
+        if (size == 0) {
+            return register_no + index;
+            throw std::runtime_error("Array type access to a scalar variable is not allowed"
+                                     "\nInternal error: cannot ask for table known only at runtime");
+        }
         const auto offset = index - index_shift;
         if (offset < 0 || offset >= size) {
             throw std::runtime_error("Access to elements outside the table is not allowed");
@@ -90,6 +97,8 @@ public:
     int add();
 
     int add_table(const std::string &pid, int from, int to);
+
+    int add_proc_table(const std::string &pid);
 
     int assign_register(void);
 

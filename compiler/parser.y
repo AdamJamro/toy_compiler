@@ -10,6 +10,8 @@
 #include <unordered_set>
 #include "parser_utils.h"
 #include <typeinfo>
+#include <algorithm>
+
 
 extern int yylineno;
 extern FILE* yyin;
@@ -61,7 +63,7 @@ unordered_set<long> cached_constants = {};
     TokenAttribute* attr;
 }
 
-%type <attr> main procedures proc_head proc_call args_decl args identifier tidentifier expression value command commands condition
+%type <attr> main procedures proc_head proc_call args_decl args declarations identifier tidentifier expression value command commands condition
 %token <attr> NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
 %token BEGIN_KW
@@ -73,47 +75,72 @@ unordered_set<long> cached_constants = {};
 
 program_all:
     procedures main {
-            const auto& main_block = $2->translation;
+        auto& main_block = $2->translation;
+        auto& procedures_block = $1->translation;
+        long line_count = 0;
+        long translation_header_offset = 0;
 
-            // TODO uncomment:
-            // list<long> cache_regs = regs.unused_registers(cached_constants.size()) // outputs registers never yet returned by any add/assign method
-            // cache_register = cache_regs.begin()
-            for (auto const constant : cached_constants) { // TODO ENHANCE postprocessing HERE
-                output_file << "SET " << constant << endl;
-                //regs.add(to_string(constant), cache_register);
-                output_file << "STORE [" << constant << "]" << endl;
-                // output_file << "STORE " << regs.at(to_string(constant)) << endl;
-            }
-
-            // TODO UNCOMMENT LINES BELLOW: (procedures)
-            const auto& procedures_block = $1->translation;
-            output_file << "JMP " << procedures_block.size() + 1 << endl;
-            for (const auto& line : procedures_block) {
-                output_file << line << endl;
-            }
-
-            for (const auto& line : main_block) {
-                /*if (line.find("SET") != string::npos && line.find("[") == string::npos) {
-                    const auto rvalue = line.substr(4, line.find("#") == string::npos ? line.length() : line.find("#"));
-                    cout << "value: " << rvalue << "; count: " << cached_constants.count(stol(rvalue))  << endl;
-                    if (cached_constants.contains(stol(rvalue))) {
-                        output_file << "LOAD [" << rvalue << "]" << line.substr(4 + rvalue.length(), line.length()) << endl;
-                        //TODO replace by:
-                        //output_file << "LOAD [" << regs.at(rvalue) << "]" << endl;
-                        continue;
-                    }
-                }*/ // no clue what this was supposed to do
-                output_file << line << endl;
-            }
-            output_file << "HALT";
-            free($2);
+        // TODO uncomment:
+        // list<long> cache_regs = regs.unused_registers(cached_constants.size()) // outputs registers never yet returned by any add/assign method
+        // cache_register = cache_regs.begin()
+        for (auto const constant : cached_constants) { // TODO ENHANCE postprocessing HERE
+            // TODO cache uncached [constants]
+            // TODO un-cache unused constants
+            output_file << "SET " << constant << endl;
+            //regs.add(to_string(constant), cache_register); //???
+            output_file << "STORE [" << constant << "]" << endl;
+            // output_file << "STORE " << regs.at(to_string(constant)) << endl;
+            line_count += 2;
+            translation_header_offset += 2;
         }
+
+
+        // translate procedures block
+        if (!procedures_block.empty()) {
+            long procedures_block_size = 1; // instead of adding extra one to reach over the last line
+
+            for (const auto& line : procedures_block) {
+                procedures_block_size += 1 + std::ranges::count(line, '\n');
+            }
+
+            output_file << "JMP " << procedures_block_size << endl;
+            line_count++;
+            //translation_header_offset++;
+        }
+        for (auto& line : procedures_block) {
+            parse_line(line, line_count, translation_header_offset); // replaces this_line with actual line number considering header_offset
+            output_file << line << endl;
+            line_count++;
+            line_count += std::ranges::count(line, '\n');;
+        }
+
+        for (auto& line : main_block) {
+            parse_line(line, line_count, translation_header_offset); // replaces this_line with actual line number
+            /*if (line.find("SET") != string::npos && line.find("[") == string::npos) {
+                const auto rvalue = line.substr(4, line.find("#") == string::npos ? line.length() : line.find("#"));
+                cout << "value: " << rvalue << "; count: " << cached_constants.count(stol(rvalue))  << endl;
+                if (cached_constants.contains(stol(rvalue))) {
+                    output_file << "LOAD [" << rvalue << "]" << line.substr(4 + rvalue.length(), line.length()) << endl;
+                    //TODO replace by:
+                    //output_file << "LOAD [" << regs.at(rvalue) << "]" << endl;
+                    continue;
+                }
+            }*/ // no clue what this was supposed to do
+            output_file << line << endl;
+            line_count++;
+            line_count += std::ranges::count(line, '\n');
+        }
+        output_file << "HALT";
+        free($2);
+    }
     ;
 
 procedures:
     procedures PROCEDURE proc_head IS declarations BEGIN_KW commands END {
         const auto& fun_name = $3->str_value;
         const auto& arguments = $3->translation;
+        const auto& declarations = $5->translation;
+        auto& proc_commands = $7->translation;
 
         if (regs.contains(fun_name)){
             yyerror("procedure's name is ambiguous", yylineno, fun_name);
@@ -121,12 +148,23 @@ procedures:
         const auto return_reg = regs.add(fun_name);
 
         // store procedure's data
-        const auto fun_line_no = $1->translation.size() + 1;
+        const auto fun_line_no = $1->translation.size(); // line indexes are shifted down by one
         const auto first_arg = regs.at(arguments.front());
         funs.add(fun_name, fun_line_no, arguments.size(), first_arg);
 
+        // parse commands
+        // switch arguments values into references
+        for (auto& line : proc_commands) {
+            list<long> argument_registers = {};
+            for (const auto& pid : arguments) {
+                argument_registers.emplace_back(regs.at(pid));
+            }
+
+            parse_proc_line(line, argument_registers);
+        }
+
         $$ = $1;
-        $1->translation.splice($1->translation.end(), $7->translation);
+        $1->translation.splice($1->translation.end(), proc_commands);
         $$->translation.emplace_back("RTRN " + to_string(return_reg));
 
         // forget this context after moving to the next procedure
@@ -134,6 +172,12 @@ procedures:
             regs.forget_pid(pid);
         }
         // TODO forget regular declarations
+        for (const auto& pid : declarations) {
+            regs.forget_pid(pid);
+        }
+        free($3);
+        free($5);
+        free($7);
     }
     | procedures PROCEDURE proc_head IS BEGIN_KW commands END {
         const auto& fun_name = $3->str_value;
@@ -163,6 +207,7 @@ procedures:
 main:
     PROGRAM IS declarations BEGIN_KW commands END {
             $$ = $5;
+            free($3);
         }
     | PROGRAM IS BEGIN_KW commands END {
             $$ = $4;
@@ -195,6 +240,7 @@ command:
                 if ($1->translation.empty()) { // pid[num] todo DELETE THIS CASE AS TRANSLATION CANNOT BE EMPTY ANYMORE!
                     // expression puts its value into r0!
                     $$->translation.emplace_back("STOREI " + to_string($1->register_no) + "\t#" + $1->str_value);
+                    throw std::runtime_error("address translation is empty");
                 } else { // pid[pid]
                     const auto tmp_reg = regs.add_rval(); // store address here
                     $1->translation.emplace_back("STORE " + to_string(tmp_reg) + "\t#tmp pid address");
@@ -202,7 +248,9 @@ command:
                     // expression puts its value into r0
                     $$->translation.emplace_back("STOREI " + to_string(tmp_reg) + "\t#" + $1->str_value + "[..]");
                 }
+                cout << "i'm here with " << $1->str_value << " of type " << $1->type << endl;
             } else {
+                cout << "i'm here with " << $1->str_value << " of type " << $1->type << endl;
                 // expression value already in r0!
                 $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value + ((regs.get_pid($1->str_value).size > 1) ? ("[" + to_string($1->register_no - regs.at($1->str_value) + regs.get_pid($1->str_value).index_shift) + "]") : ""));
             }
@@ -485,16 +533,25 @@ proc_call:
 
         $$ = $1;
         $$->translation = {};
+        const auto& arguments = $3->translation;
 
         auto arg_count = 0;
         const auto arg_no = funs.get_arg_count(fun_name);
         const auto first_arg_register = funs.get_first_arg_register(fun_name);
-        for (const auto& pid : $3->translation) {
+        for (const auto& pid : arguments) {
             arg_count++;
             if (arg_count > arg_no) {
                 yyerror("too many arguments in procedure call", yylineno, fun_name);
             }
-            $$->translation.emplace_back("LOAD [" + to_string(regs.at(pid)) + "]");
+
+            const auto& pid_type = regs.get_pid(pid);
+            if (pid_type.size == 1) {
+                $$->translation.emplace_back("LOAD [" + to_string(regs.at(pid)) + "]" + "\t# passing address");
+            } else {
+                $$->translation.emplace_back("LOAD [" + to_string(regs.at(pid) - pid_type.index_shift) + "]\t# passing address of an array");
+            }
+
+
             $$->translation.emplace_back(
                 "STORE " + to_string(first_arg_register + arg_count - 1)
             );
@@ -504,12 +561,12 @@ proc_call:
             yyerror("too few arguments in procedure call. expected: " + to_string(arg_no) + ", got: " + to_string(arg_count), yylineno, fun_name);
         }
 
-        // TODO figure out thie line_no
-        const auto this_line = 101010101010
-        $$->translation.emplace_back("LOAD [" + this_line + 3"]");
+        // TODO figure out the line_no
+        //const auto this_line = 101010101010;
+        $$->translation.emplace_back("LOAD [this_line + 3]");
         $$->translation.emplace_back("STORE " + to_string(regs.at(fun_name)));
         // TODO cached_constants.insert(this_line + 3);
-        $$->translation.emplace_back("JUMP " + to_string(funs.get_line_no(fun_name) + 1 - this_line));
+        $$->translation.emplace_back("JUMP " + to_string(funs.get_line_no(fun_name)) + " - this_line");
         free($3);
     }
     ;
@@ -521,6 +578,8 @@ declarations:
                 yyerror("identifier redeclaration", yylineno-1, pid);
             }
             regs.add(pid);
+            $$ = $1;
+            $$->translation.emplace_back(pid);
             free($3);
         }
     | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']' {
@@ -533,6 +592,8 @@ declarations:
             } catch (std::runtime_error e) {
                 yyerror(e.what());
             }
+            $$ = $1;
+            $$->translation.emplace_back(pid);
             free($3);
             free($5);
             free($7);
@@ -543,7 +604,8 @@ declarations:
                 yyerror("identifier redeclaration", yylineno-1, pid);
             }
             regs.add(pid);
-            free($1);
+            $$ = $1;
+            $$->translation = {pid};
         }
     | pidentifier '[' NUMBER ':' NUMBER ']' {
             const auto& pid = $3->str_value;
@@ -555,7 +617,8 @@ declarations:
             } catch (std::runtime_error e) {
                 yyerror(e.what());
             }
-            free($1);
+            $$ = $1;
+            $$->translation = {pid};
             free($3);
             free($5);
         }
@@ -576,7 +639,7 @@ args_decl:
         if (regs.contains(pid)) {
             yyerror("identifier redeclaration", yylineno-1, pid);
         }
-        regs.add(pid);
+        regs.add_proc_table(pid);
         $$ = $1;
         $$->translation.emplace_back(pid);
         free($4);
@@ -699,7 +762,6 @@ expression: // simply puts result of the expression into r0
                 cached_constants.insert($$->long_value);
                 $$->translation.emplace_back("ADD " + to_string(str_token->register_no));
                 free(num_token);
-
             }
 
             $$->str_value = "rval";
@@ -708,26 +770,21 @@ expression: // simply puts result of the expression into r0
             */
         }
     | value '-' value {
-          const auto val = $1->long_value - $3->long_value;
-
-          // TODO refactor (maybe pass a reference to cached_constants to parse_expression):
-          if($1->type == LONG || $3->type == LONG) {
-              long new_constant;
-              if ($1->type == LONG && $3->type == LONG) {
-                  new_constant = val;
-              } else if ($1->type == LONG) {
-                  new_constant = $1->long_value;
-              } else if ($3->type == LONG) {
-                  new_constant = $3->long_value;
-              }
-              cached_constants.insert(new_constant); // missed optimization
-          }
-
-          $$ = parse_expression($1, $3, "SUB", "SUB", val, regs.add_rval());
+        const auto val = $1->long_value - $3->long_value;
+        $$ = parse_expression($1, $3, "SUB", "RSUB", val, regs.add_rval());
     }
-    | value '*' value   {throw std::runtime_error("MUL NOT IMPLEMENTED");}
-    | value '/' value   {throw std::runtime_error("DIV NOT IMPLEMENTED");}
-    | value '%' value   {throw std::runtime_error("MOD NOT IMPLEMENTED");}
+    | value '*' value   {
+        const auto val = $1->long_value * $3->long_value;
+        $$ = parse_expression($1, $3, "MUL", "MUL", val, regs.add_rval());
+    }
+    | value '/' value   {
+        const auto val = $3->long_value == 0 ? 0 : $1->long_value / $3->long_value;
+        $$ = parse_expression($1, $3, "DIV", "RDIV", val, regs.add_rval());
+    }
+    | value '%' value   {
+        const auto val = $3->long_value == 0 ? 0 : $1->long_value % $3->long_value;
+        $$ = parse_expression($1, $3, "MOD", "RMOD", val, regs.add_rval());
+    }
     ;
 
 condition: // evaluates condition and leaves a blank jump to a "else" clause (specified one step up the parse tree)
@@ -844,25 +901,50 @@ identifier:
             if (!regs.contains($1->str_value)) {
                 yyerror("undefined identifier", yylineno, $1->str_value);
             }
-            const auto tab_offset = regs.at($1->str_value) - regs.get_pid($1->str_value).index_shift;
-            cached_constants.insert(tab_offset);    // missed optimization
-            $$->translation.emplace_back("LOAD [" + to_string(tab_offset) + "]");
-            $$->translation.emplace_back("ADD " + to_string(regs.at($3->str_value)));
 
-            cached_constants.insert(tab_offset);
+            const auto& table_pid_type = regs.get_pid($1->str_value);
+
+            //CASE: IT IS A TABLE
+            if (table_pid_type.size != 0) {
+                const auto tab_offset = regs.at($1->str_value) - regs.get_pid($1->str_value).index_shift;
+                cached_constants.insert(tab_offset);    // missed optimization
+                $$->translation.emplace_back("LOAD [" + to_string(tab_offset) + "]");
+                $$->translation.emplace_back("ADD " + to_string(regs.at($3->str_value)));
+            } else { //CASE: IT IS A TABLE REFERENCE
+                $$->translation.emplace_back("LOAD " + to_string(regs.at($1->str_value)) + "\t# passing address");
+                $$->translation.emplace_back("ADD " + to_string(regs.at($3->str_value)));
+            }
+
             $$->type = ADDRESS;
             $$->lineno = yylineno;
             free($3);
         }
     | pidentifier '[' NUMBER ']' {
-            //translation stays empty as we know the pid register location
             $$ = $1;
-            try {
-                $$->register_no = regs.at($1->str_value, $3->long_value);
-            } catch (const std::runtime_error& e) {
-                yyerror(e.what(), yylineno, $1->str_value + "[" + to_string($3->long_value) + "]");
+            if (!regs.contains($1->str_value)) {
+                yyerror("undefined identifier", yylineno, $1->str_value);
             }
-            $$->type = STRING; // treat as regular pid as we know exact location of the register
+            const auto value = $3->long_value;
+            const auto table_pid_type = regs.get_pid($1->str_value);
+            const auto is_reference = table_pid_type.size == 0;
+
+            //CASE: IT IS A TABLE REFERENCE
+            if (is_reference) {
+                //create a translation that puts address in r0
+                $$->translation.emplace_back("LOAD " + to_string(regs.at($1->str_value)) + "\t# passing address");
+                $$->translation.emplace_back("ADD [" + to_string(value) + "]");
+                $$->type = ADDRESS;
+                cached_constants.insert(value);
+            } else { //CASE: IT IS A TABLE
+                //translation stays empty as we know the pid register location
+                try {
+                    $$->register_no = regs.at($1->str_value, $3->long_value);
+                } catch (const std::runtime_error& e) {
+                    yyerror(e.what(), yylineno, $1->str_value + "[" + to_string(value) + "]");
+                }
+                $$->type = STRING; // treat as regular pid as we know exact location of the register
+            }
+
             $$->lineno = yylineno;
             free($3);
         }

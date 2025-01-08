@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
+#include <algorithm>
 
 TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2, const std::string& operation, const std::string& reverse_operation, const long value, const long tmp_reg) {
     // TODO probably reverse_operation is not required for parsing expression
@@ -27,10 +28,10 @@ TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2,
             adr_token->translation.emplace_back((swap ? reverse_operation : operation) + " " + std::to_string(tmp_reg));
         } else if (other_token->type == STRING) {
             // ADDRESS .. PID
-            adr_token->translation.emplace_back(operation +  " " + std::to_string(other_token->register_no));
+            adr_token->translation.emplace_back((swap ? reverse_operation : operation) +  " " + std::to_string(other_token->register_no));
         } else if (other_token->type == LONG) {
             // ADDRESS .. RVAL
-            adr_token->translation.emplace_back(operation + " [" + std::to_string(other_token->long_value) + "]");
+            adr_token->translation.emplace_back((swap ? reverse_operation : operation) + " [" + std::to_string(other_token->long_value) + "]");
         } else {
             throw std::invalid_argument("invalid value type inside of expression");
         }
@@ -52,8 +53,8 @@ TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2,
         TokenAttribute* str_token = swap ? token1 : token2;
         TokenAttribute* num_token = swap ? token2 : token1;
 
-        str_token->translation.emplace_back("SET " + std::to_string(num_token->long_value));
-        str_token->translation.emplace_back("ADD " + std::to_string(str_token->register_no));
+        str_token->translation.emplace_back("LOAD [" + std::to_string(num_token->long_value) + "]");
+        str_token->translation.emplace_back((swap ? reverse_operation : operation) + " " + std::to_string(str_token->register_no));
         token1 = str_token; // ensure $$ has the rval register and string type
         free(num_token);
     }
@@ -138,6 +139,82 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
     return token1;
 }
 
+void parse_line(std::string& line, const long line_no, const long translation_header_offset) {
+
+    //replace this_line with actual line_no
+    if (const auto pos = line.find("this_line"); pos != std::string::npos) {
+        if (const auto pos_proc_call_load_line = line.find("[this_line + 3]"); pos_proc_call_load_line != std::string::npos) {
+            line.replace(pos_proc_call_load_line + 1, 13, std::to_string(line_no + 3));
+        }
+        if (const auto pos_proc_call_jump_to_proc = line.find("JUMP "); pos_proc_call_jump_to_proc != std::string::npos) {
+            const int value_length = line.find(" -") - line.front();
+            const auto value = std::stoi(line.substr(pos_proc_call_jump_to_proc + 4, value_length));
+            line = "JUMP " + std::to_string(value - line_no + translation_header_offset) + "\t# original: " + std::to_string(value) + " - " + std::to_string(line_no);
+        }
+    }
+}
+
+
+void parse_proc_line(std::string& line, const std::list<long>& arg_regs) {
+
+    for (const auto& reg : arg_regs) {
+        const auto& reg_str = std::to_string(reg);
+        if (const auto pos = line.find(reg_str); pos != std::string::npos) {
+
+            if (line.compare(0, 4, "LOAD") == 0) {
+                if (line.find("# passing address") == std::string::npos) {
+                    line = "LOADI " + reg_str;
+                } else {
+                    // if it was reference pass we pass it as is
+                    // if it was a proc call then erase brackets
+                    const auto close_bracket_pos = line.find(']');
+                    const auto open_bracket_pos = line.find('[');
+                    if (close_bracket_pos != std::string::npos && open_bracket_pos != std::string::npos) {
+                        line.erase(close_bracket_pos, 1);
+                        line.erase(open_bracket_pos, 1);
+                    }
+
+                    // if it wasn't then we just leave it
+                }
+
+                continue;
+            }
+
+            // LOAD was the only case that could interfere with [ ] constants
+            if (line.find("[") != std::string::npos) {
+                return; // the arg was used as a constant
+            }
+
+            if (line.compare(0, 5, "LOADI") == 0) {
+                line = "LOADI " + reg_str + "\nLOADI 0";
+            } else if (line.compare(0, 5, "STORE") == 0) {
+                line = "STOREI " + reg_str;
+            } else if (line.compare(0, 6, "STOREI") == 0) {
+                line = "STOREII " + reg_str;
+            } else if (line.compare(0, 3, "ADD") == 0) {
+                line = "ADDI " + reg_str;
+            } else if (line.compare(0, 4, "ADDI") == 0) {
+                line = "ADDII " + reg_str;
+            } else if (line.compare(0, 3, "SUB") == 0) {
+                line = "SUBI " + reg_str;
+            } else if (line.compare(0, 4, "SUBI") == 0) {
+                line = "SUBII " + reg_str;
+            } else if (line.compare(0, 3, "MUL") == 0) {
+                line = "MULI " + reg_str;
+            } else if (line.compare(0, 3, "DIV") == 0) {
+                line = "DIVI " + reg_str;
+            } else if (line.compare(0, 3, "MOD") == 0) {
+                line = "MODI " + reg_str;
+            } else if (line.compare(0, 3, "GET") == 0) {
+                line = "GET 0\nSTOREI " + reg_str;
+            } else if (line.compare(0, 3, "PUT") == 0) {
+                line = "LOADI " + reg_str + "\nPUT 0";
+            }
+        }
+    }
+}
+
+
 //FUNS_TABLE
 void funs_table::add(const std::string &fun_name, long line_no, long amount_of_arguments, long first_reg) {
     line_no_of_[fun_name] = line_no;
@@ -182,10 +259,10 @@ int register_table::assign_registers(const int size) {
     if (free_registers.empty()) {
         throw std::runtime_error("MEMORY ERROR: OUT OF REGISTERS");
     }
-    std::cout << "assignment size: "<<size<<std::endl<<"free regs before oparation:" << std::endl;
-    for (const auto& [first, last] : free_registers) {
-        printf("from %lld to %lld\n", first, last);
-    }
+    // std::cout << "assignment size: "<<size<<std::endl<<"free regs before oparation:" << std::endl;
+    // for (const auto& [first, last] : free_registers) {
+    //     printf("from %lld to %lld\n", first, last);
+    // }
 
     auto it = free_registers.begin();
     const auto end = free_registers.end();
@@ -204,17 +281,16 @@ int register_table::assign_registers(const int size) {
         free_registers.insert(chopped_range);
     }
 
-    std::cout << "free regs after oparation:" << std::endl;
-    for (const auto& [first, last] : free_registers) {
-        printf("from %lld to %lld\n", first, last);
-    }
+    // std::cout << "free regs after oparation:" << std::endl;
+    // for (const auto& [first, last] : free_registers) {
+    //     printf("from %lld to %lld\n", first, last);
+    // }
     return reg;
 }
 
 register_table::register_table() : free_registers(), table() {
-    free_registers.insert(std::make_pair(2,2<<29));
+    free_registers.insert(std::make_pair(1,2<<29));
     // r0 is used as a special temporary register
-    // r1 is used to store the line_no to return to from a function
 }
 
 void register_table::remove(const std::string& pid) { // maybe free_pid() ?
@@ -301,7 +377,7 @@ int register_table::at(const std::string& pid, const int index) const {
 
 int register_table::add_rval(void) const { // maybe rename to add_tmp or get_free_register
     if (free_registers.empty()) {
-        throw std::runtime_error("ERROR OUT OF REGISTERS");
+        throw std::runtime_error("ERROR: OUT OF REGISTERS");
     }
     const auto it = free_registers.begin();
     const auto reg = it->first;
@@ -356,6 +432,24 @@ int register_table::add_table(const std::string &pid, const int from, const int 
     return new_pid.register_no;
 }
 
+int register_table::add_proc_table(const std::string& pid) {
+    if (table.contains(pid)){
+        // throw std::runtime_error("Syntax Error: Redeclaration of variable");
+        return table[pid].register_no;
+    } //TODO it was simply commented out you need to handle it in the parser tho
+
+    pid_type new_pid;
+    // mock a table
+    // make 0 a special value size for this case
+    new_pid.size = 0;
+    new_pid.index_shift = 0;
+    new_pid.register_no = assign_register();
+    table[pid] = new_pid;
+    return new_pid.register_no;
+}
+
+
+//MISCELLANEOUS
 std::string extract_function_name(const std::string& fun_call) {
     const size_t pos = fun_call.find('(');
     if (pos == std::string::npos) {
