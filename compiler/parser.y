@@ -81,41 +81,34 @@ program_all:
         long translation_header_offset = 0;
 
         // TODO uncomment:
-        // list<long> cache_regs = regs.unused_registers(cached_constants.size()) // outputs registers never yet returned by any add/assign method
-        // cache_register = cache_regs.begin()
-        for (auto const constant : cached_constants) { // TODO ENHANCE postprocessing HERE
-            // TODO cache uncached [constants]
-            // TODO un-cache unused constants
-            output_file << "SET " << constant << endl;
-            //regs.add(to_string(constant), cache_register); //???
-            output_file << "STORE [" << constant << "]" << endl;
-            // output_file << "STORE " << regs.at(to_string(constant)) << endl;
-            line_count += 2;
-            translation_header_offset += 2;
-        }
+        // TODO ENHANCE postprocessing HERE
+        // scan to cache uncached constants
+
+
+
 
 
         // translate procedures block
         if (!procedures_block.empty()) {
-            long procedures_block_size = 1; // instead of adding extra one to reach over the last line
+            long procedures_block_size = 0; // instead of adding extra one to reach over the last line
 
             for (const auto& line : procedures_block) {
                 procedures_block_size += 1 + std::ranges::count(line, '\n');
             }
 
-            output_file << "JMP " << procedures_block_size << endl;
+            output_file << "JMP " << procedures_block_size + 1 << endl; // step over the block
             line_count++;
             //translation_header_offset++;
         }
         for (auto& line : procedures_block) {
-            parse_line(line, line_count, translation_header_offset); // replaces this_line with actual line number considering header_offset
+            //parse_line(line, line_count, translation_header_offset, cache_regs); // replaces this_line with actual line number considering header_offset
             output_file << line << endl;
             line_count++;
             line_count += std::ranges::count(line, '\n');;
         }
 
         for (auto& line : main_block) {
-            parse_line(line, line_count, translation_header_offset); // replaces this_line with actual line number
+            //parse_line(line, line_count, translation_header_offset, cache_regs); // replaces this_line with actual line number
             /*if (line.find("SET") != string::npos && line.find("[") == string::npos) {
                 const auto rvalue = line.substr(4, line.find("#") == string::npos ? line.length() : line.find("#"));
                 cout << "value: " << rvalue << "; count: " << cached_constants.count(stol(rvalue))  << endl;
@@ -126,6 +119,7 @@ program_all:
                     continue;
                 }
             }*/ // no clue what this was supposed to do
+
             output_file << line << endl;
             line_count++;
             line_count += std::ranges::count(line, '\n');
@@ -248,9 +242,7 @@ command:
                     // expression puts its value into r0
                     $$->translation.emplace_back("STOREI " + to_string(tmp_reg) + "\t#" + $1->str_value + "[..]");
                 }
-                cout << "i'm here with " << $1->str_value << " of type " << $1->type << endl;
             } else {
-                cout << "i'm here with " << $1->str_value << " of type " << $1->type << endl;
                 // expression value already in r0!
                 $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value + ((regs.get_pid($1->str_value).size > 1) ? ("[" + to_string($1->register_no - regs.at($1->str_value) + regs.get_pid($1->str_value).index_shift) + "]") : ""));
             }
@@ -977,22 +969,24 @@ void yyerror(const std::string& msg, int lineno, const std::string& lexem) {
 }
 
 int main(int argc, char* argv[]) {
-
     // correct number of arguments is provided
     if (argc != 3) {
         cerr << "Usage: " << argv[0] << " <input_file> <output_file>" << endl;
         return 1;
     }
 
+    auto output_filename = argv[2];
+    auto input_filename = argv[1];
+
     // Open the output file
-    output_file.open(argv[2]);
+    output_file.open(output_filename);
     if (!output_file) {
         cerr << "Error: Could not open output file " << argv[2] << endl;
         return 1;
     }
 
     // Open the input file
-    yyin = fopen(argv[1], "r");
+    yyin = fopen(input_filename, "r");
     if (!yyin) {
         cerr << "Error: Could not open input file " << argv[1] << endl;
         return 1;
@@ -1003,6 +997,8 @@ int main(int argc, char* argv[]) {
 
     fclose(yyin);
     output_file.close();
+
+    postprocess(output_filename, regs);
 
     if (parse_result == 0) {
         printf("Parsing completed successfully\n");

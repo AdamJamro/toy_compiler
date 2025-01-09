@@ -22,10 +22,14 @@
 //     }
 // };
 
+struct pid_type;
+class register_table;
 TokenAttribute* parse_expression(TokenAttribute*, TokenAttribute*, const std::string&, const std::string&, long, long);
 TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, bool, int, int, std::unordered_set<long>&);
-void parse_line(std::string&, long, long);
+void check_for_caches(const std::string&, std::unordered_set<long>&);
+void parse_line(std::string&, long, long, std::unordered_map<std::string, long>&);
 void parse_proc_line(std::string&, const std::list<long>&);
+void postprocess(const std::string&, register_table&);
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {
@@ -72,6 +76,7 @@ class register_table {
 private:
     std::set<std::pair<long long int, long long int>, CompareFirstPairEntry> free_registers; // (interval)
     std::unordered_map<std::string, pid_type> table; // (pid, (size,register))
+    long first_untouched_register; // lowest register that was never used by any pid or tid
 
 public:
     register_table();
@@ -86,7 +91,7 @@ public:
 
     int at(const std::string &pid, int index) const;
 
-    int add_rval() const;
+    int add_rval();
 
     pid_type get_pid(const std::string &pid) const;
 
@@ -96,9 +101,13 @@ public:
 
     int add();
 
+    void add_cache_reg(const std::string &pid, long long reg);
+
     int add_table(const std::string &pid, int from, int to);
 
     int add_proc_table(const std::string &pid);
+
+    long unused_register() const;
 
     int assign_register(void);
 
