@@ -10,62 +10,8 @@
 #include <utility>
 #include <algorithm>
 
-void postprocess(const std::string& filename, register_table& regs) {
-    std::ifstream input_file(filename);
-    std::list<std::string> file_contents;
-    std::string line;
-
-    while (std::getline(input_file, line)) {
-        file_contents.emplace_back(line);
-    }
-    input_file.close();
-
-    std::ofstream output_file(filename);
-
-
-    // calculate header offset and collect all cached constants
-    auto header_offset = 0;
-    std::unordered_set<long> cached_constants = {};
-    for (const auto& translation_line : file_contents) {
-        check_for_caches(translation_line, cached_constants);
-        if (translation_line.find("this_line")!= std::string::npos) {
-            header_offset += 2;
-        }
-    }
-    if (file_contents.front().compare(0, 4, "JUMP") == 0) {
-        header_offset += 1;
-    }
-
-
-    auto cache_reg = regs.unused_register(); // outputs registers never yet returned by any add/assign method
-    std::unordered_map<std::string, long> cache_regs = {};
-    for (auto const constant : cached_constants) {
-        // TODO cache uncached [constants]
-        // TODO un-cache unused constants
-
-        // take care of cached constants:
-        cache_regs[std::to_string(constant)] = cache_reg;
-        output_file << "SET " << constant << std::endl;
-        //regs.add(to_string(constant), cache_register); //???
-        //output_file << "STORE [" << constant << "]" << endl; // delete
-        output_file << "STORE " << cache_reg << "\t# ["<< constant << "]" << std::endl;
-        //translation_header_offset += 2;
-        cache_reg++; // use next register
-    }
-
-    auto header_size = cache_regs.size();
-    long line_count = 0;
-    for (auto& translation_line : file_contents) {
-        parse_line(translation_line, line_count, header_size, cache_regs);
-        line_count++;
-    }
-
-    for (auto& translation_line : file_contents) {
-        output_file << translation_line << std::endl;
-    }
-
-}
-
+const std::string math_module::multiplication_path = "../compiler/math_module/multiplication.mr";
+const std::string math_module::division_path = "../compiler/math_module/division.mr";
 
 TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2, const std::string& operation, const std::string& reverse_operation, const long value, const long tmp_reg) {
     // TODO probably reverse_operation is not required for parsing expression
@@ -197,6 +143,202 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
     return token1;
 }
 
+void postprocess(const std::string& filename, register_table& regs) {
+    std::ifstream input_file(filename);
+    std::ifstream multiplication_file(math_module::multiplication_path);
+    std::ifstream division_file(math_module::division_path);
+    std::list<std::string> file_contents;
+    std::list<std::string> multiplication_contents;
+    std::list<std::string> division_contents;
+    std::string line;
+    // registers never yet returned by any add/assign method:
+    auto last_free_reg = regs.unused_register();
+    bool multiplication_flag = false; // include MUL
+    bool division_flag = false;     // include DIV and MOD
+    long mul_proc_line_no;
+    long div_proc_line_no;
+    long mul_args;
+    long div_args;
+
+    while (std::getline(input_file, line)) {
+        file_contents.emplace_back(line);
+        if (line.compare(0,3,"MUL") == 0) {
+            if (multiplication_flag == false) {
+                multiplication_flag = true;
+                while (std::getline(multiplication_file, line)) {
+                    multiplication_contents.emplace_back(line);
+                }
+            }
+        }
+        if (line.compare(0,3,"DIV") == 0
+            || line.compare(0, 3, "MOD") == 0) {
+            if (division_flag == false) {
+                division_flag = true;
+                while (std::getline(division_file, line)) {
+                    division_contents.emplace_back(line);
+                }
+            }
+        }
+    }
+
+    input_file.close();
+    multiplication_file.close();
+    division_file.close();
+    std::ofstream output_file(filename);
+
+    // TODO check for library links before header_offset and cacheing
+    if (multiplication_flag) {
+        mul_args = last_free_reg;
+        last_free_reg = last_free_reg + 6; // NUMBER OF REGISTERS USED BY MUL
+    }
+    if (division_flag) {
+        mul_args = last_free_reg;
+        last_free_reg = last_free_reg + 8; // NUMBER OF REGISTERS USED BY DIV
+    }
+
+    // calculate header offset and collect all cached constants
+    long header_size = 0;
+    std::unordered_set<long> cached_constants = {};
+    for (const auto& translation_line : file_contents) {
+        check_for_caches(translation_line, cached_constants); // omits "this_line"'s
+    }
+    if (multiplication_flag) {
+        for (const auto& mul_line : multiplication_contents) {
+            check_for_caches(mul_line, cached_constants);
+        }
+    }
+    if (division_flag) {
+        for (const auto& div_line : division_contents) {
+            check_for_caches(div_line, cached_constants);
+        }
+    }
+
+    std::unordered_map<std::string, long> cache_regs = {};
+    for (auto const constant : cached_constants) {
+        // take care of cached constants:
+        const auto cache_reg = last_free_reg;
+        last_free_reg++; // use next register
+        cache_regs[std::to_string(constant)] = cache_reg;
+
+        output_file << "SET " << constant << std::endl;
+        //regs.add(to_string(constant), cache_register); //???
+        //output_file << "STORE [" << constant << "]" << endl; // delete
+        output_file << "STORE " << cache_reg << "\t# ["<< constant << "]" << std::endl;
+        header_size += 2;
+    }
+
+    int lib_size = 0;
+    if (multiplication_flag) {
+        mul_proc_line_no = header_size + 1; // we use one line jump to skip the lib
+        lib_size += multiplication_contents.size();
+    }
+    if (division_flag) {
+        div_proc_line_no = header_size + lib_size + 1; // we use one line jump to skip the lib
+        lib_size += division_contents.size();
+    }
+    header_size += lib_size;
+
+    if (multiplication_flag || division_flag) {
+        output_file << "JUMP " + std::to_string(lib_size + 1) << std::endl;
+        header_size += 1;
+    }
+
+    if (file_contents.front().compare(0, 4, "JUMP") == 0) {
+        header_size += 1;
+    }
+
+    if (multiplication_flag) {
+        for (auto& mul_line : multiplication_contents) {
+            parse_math_module_line(mul_line, mul_args, cache_regs);
+            output_file << mul_line << std::endl;
+        }
+    }
+    if (division_flag) {
+        for (auto& div_line : division_contents) {
+            parse_math_module_line(div_line, div_args, cache_regs);
+            output_file << div_line << std::endl;
+        }
+    }
+
+    auto line_count = header_size;
+    auto it = file_contents.begin();
+    while (it != file_contents.end()) {
+        auto& translation_line = *it;
+        auto& current_pos = it;
+        ++it;
+        if (translation_line.compare(0, 3, "MUL") == 0) {
+            auto translation = jump_to_mul_proc(translation_line, mul_args, mul_proc_line_no, line_count);
+            file_contents.splice(current_pos, translation);
+            translation_line = "#EMPTY";
+            line_count += translation.size();
+        } else if (translation_line.compare(0, 3, "DIV") == 0) {
+            auto translation = jump_to_div_proc(translation_line, div_args, div_proc_line_no, line_count);
+            file_contents.splice(current_pos, translation);
+            line_count += translation.size();
+        } else if (translation_line.compare(0, 3, "MOD") == 0) {
+            auto translation = jump_to_mod_proc(translation_line, div_args, div_proc_line_no, line_count);
+            file_contents.splice(current_pos, translation);
+            line_count += translation.size();
+        } else {
+            line_count++;
+        }
+    }
+
+    line_count = header_size - 1; // for some reason file_contents contains JUMP to the main (procs skip)
+    for (auto& translation_line : file_contents) {
+        if (translation_line.compare(0, 6, "#EMPTY") == 0) {
+            continue;
+        }
+        //parse_line(translation_line, line_count, header_size, cache_regs);
+        output_file << translation_line << std::endl;
+        line_count++;
+    }
+    std::cout << "file counts: " << line_count + 1 << " lines" << std::endl;
+}
+
+std::list<std::string> jump_to_mul_proc(std::string& line, const long reg, const long dest_line_no, const long line_no) {
+    if (const auto pos = line.find("MUL"); pos == std::string::npos) {
+        throw std::invalid_argument("The line " + line + " is not a MUL instruction");
+    }
+
+    std::list translation = {
+        "STORE " + std::to_string(reg),
+        "LOAD " + line.substr(4, line.back()),
+        "STORE " + std::to_string(reg + 1),
+        "SET " + std::to_string(line_no + 3),
+        "STORE " + std::to_string(reg + 2),
+        "JUMP " + std::to_string(dest_line_no - line_no - 5) // shift since we added 5 lines
+    };
+    return translation;
+}
+
+std::list<std::string> jump_to_div_proc(std::string& line, const long reg, const long dest_line_no, const long line_no) {
+    if (const auto pos = line.find("DIV"); pos == std::string::npos) {
+        throw std::invalid_argument("The line is not a DIV instruction");
+    }
+
+    // std::list translation = {
+    //     "STORE " + std::to_string(reg),
+    //     "LOAD " + line.substr(4, line.back()),
+    //     "STORE " + std::to_string(reg + 1),
+    //     "SET [this_line + 3]" + std::to_string(reg),
+    //     "STORE " + std::to_string(reg + 2),
+    //     "JUMP " + std::to_string(line_no) + " - this_line"
+    // };
+    return {};
+}
+
+std::list<std::string> jump_to_mod_proc(std::string& line, const long reg, const long dest_line_no, const long line_no) {
+    if (const auto pos = line.find("MOD"); pos == std::string::npos) {
+        throw std::invalid_argument("The line is not a MOD instruction");
+    }
+
+    auto translation = jump_to_div_proc(line, reg, dest_line_no, line_no);
+    translation.emplace_back("LOAD " + std::to_string(reg));
+
+    return translation;
+}
+
 void check_for_caches(const std::string& line, std::unordered_set<long>& cached_constants) {
     if (const auto pos = line.find("this_line"); pos != std::string::npos) {
         return;
@@ -209,11 +351,32 @@ void check_for_caches(const std::string& line, std::unordered_set<long>& cached_
         const auto val_length = end_pos - pos - 1;
         const auto& cached_value = line.substr(pos + 1, val_length);
         cached_constants.insert(std::stol(cached_value));
-        std::cout << "cached value: " << cached_value << std::endl;
+        // std::cout << "cached value: " << cached_value << std::endl;
     }
 }
 
+void parse_math_module_line(std::string& line, const long arg_reg, const std::unordered_map<std::string, long> &cache_regs) {
+    if (const auto pos = line.find("p+"); pos != std::string::npos) {
+        line.replace(pos, 3, std::to_string(arg_reg + std::stol(line.substr(pos + 2, 1))));
+    }
+    if (const auto pos = line.find("p"); pos != std::string::npos) {
+        line.replace(pos, 1, std::to_string(arg_reg));
+    }
+
+    if (const auto pos = line.find("["); pos != std::string::npos) {
+        if (const auto comment_pos = line.find("#"); comment_pos != std::string::npos && comment_pos < pos) {
+            return; // it's a comment
+        }
+        const auto end_pos = line.find("]", pos);
+        const auto val_length = end_pos - pos - 1;
+        const auto& cached_value = line.substr(pos + 1, val_length);
+        line.replace(pos, val_length + 2, std::to_string(cache_regs.at(cached_value)) + "\t# [" + cached_value + "]");
+    }
+
+}
+
 void parse_line(std::string& line, const long line_no, const long header_offset, std::unordered_map<std::string, long>& cache_regs) {
+    // this function assumes that all cached constants are already cached
 
     //replace this_line with actual line_no
     if (const auto pos = line.find("this_line"); pos != std::string::npos) {
@@ -223,7 +386,9 @@ void parse_line(std::string& line, const long line_no, const long header_offset,
         if (const auto pos_proc_call_jump_to_proc = line.find("JUMP "); pos_proc_call_jump_to_proc != std::string::npos) {
             const int value_length = line.find(" -") - line.front();
             const auto value = std::stoi(line.substr(pos_proc_call_jump_to_proc + 4, value_length));
-            line = "JUMP " + std::to_string(value - line_no + header_offset) + "\t# original: " + std::to_string(value) + " - " + std::to_string(line_no);
+            line = "JUMP " + std::to_string(value - line_no + header_offset)
+            + "\t# offset: +" + std::to_string(header_offset)
+            + "\toriginal: " + std::to_string(value) + " - " + std::to_string(line_no);
         }
         return;
     }
@@ -238,8 +403,9 @@ void parse_line(std::string& line, const long line_no, const long header_offset,
         const auto& cached_value = line.substr(pos + 1, val_length);
         std::cout << "line: " << line << std::endl;
         std::cout << "cached value: " << cached_value << std::endl;
-        line.replace(pos, val_length + 2, std::to_string(cache_regs.at(cached_value)));
-        line.append("\t# [" + cached_value + "]");
+        line.replace(pos, val_length + 2, std::to_string(cache_regs.at(cached_value)) + "\t# [" + cached_value + "]");
+        // TODO delete this line:
+        line.append("\t# [" + cached_value + "] " + std::to_string(std::count(line.begin(), line.end(), '\n')));
     }
 }
 
@@ -252,7 +418,8 @@ void parse_proc_line(std::string& line, const std::list<long>& arg_regs) {
 
             if (line.compare(0, 4, "LOAD") == 0) {
                 if (line.find("# passing address") != std::string::npos) {
-                    // if it was reference pass we pass it as is
+                    // "passing address" present then two cases:
+                    // if it was reference pass we pass it as is (do nothing)
                     // if it was a proc call then erase brackets
                     const auto close_bracket_pos = line.find(']');
                     const auto open_bracket_pos = line.find('[');
@@ -260,7 +427,6 @@ void parse_proc_line(std::string& line, const std::list<long>& arg_regs) {
                         line.erase(close_bracket_pos, 1);
                         line.erase(open_bracket_pos, 1);
                     }
-                    // if it wasn't then we just leave it
                 } else {
                     if (line.find("[") != std::string::npos) {
                         return; // the arg was used as a constant

@@ -1,0 +1,36 @@
+PROCEDURE foo(a, T b) IS
+    x, y
+BEGIN
+    b[x] := b[x] + 1;
+    b[3] := b[3] - 1;
+    b[3] := 1 - b[3];
+    WRITE x;
+        WRITE y;
+    a := a + b[3];
+    y := a - b;
+    y := b - a;
+    WRITE x;
+    WRITE y;
+END
+
+
+PROCEDURE boo(a, b) IS # a=6, b=7
+    x, y # x=8, y=9
+BEGIN
+    WRITE a;
+    WRITE b;
+    WRITE x;
+    WRITE y;
+    foo(x, b);
+END
+
+
+PROGRAM IS
+    a, b[-1:1]
+BEGIN
+    READ a;
+    READ b[-1];
+    a := a - b[1];
+    foo(a, b);
+    boo(a, b);
+END

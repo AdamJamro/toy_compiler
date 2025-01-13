@@ -1,0 +1,6 @@
+RTRN 3
+SET 1
+PUT 0
+SET 2
+PUT 0
+HALT

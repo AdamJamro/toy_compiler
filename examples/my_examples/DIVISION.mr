@@ -1,0 +1,144 @@
+JUMP 4
+PUT 0
+PUT 1
+HALT
+
+SET 1
+STORE 9
+STORE 3 # return line
+HALF
+STORE 10
+
+GET 1
+GET 2
+
+# init flag == 1, 5 == 0
+LOAD 9
+STORE 4 # quotient flag remembers sign of result
+STORE 5 # remainder flag remembers sign of remainder
+STORE 7 # we use it as sum quantity of denominatior value
+HALF # r0 == 0
+STORE 8 # we calculate the quotient into 8
+
+# check if x and y are positive and set the flag
+
+	#check p
+LOAD 1
+JPOS 8 # check 2
+JZERO 24 # result is zero
+# 1 is negative
+SUB 1
+SUB 1
+STORE 1
+LOAD 4 # qflag
+HALF
+STORE 4
+
+	#check 2
+LOAD 2
+JPOS 15 # done
+JZERO 15 # result is zero
+# 2 is negative
+SUB 2
+SUB 2
+STORE 2
+# set rflag
+LOAD 5 #rflag
+HALF
+STORE 5
+# toggle qflag
+LOAD 4
+SUB 9
+JNEG 3 # set flag to 1
+STORE 4 # set flag to 0
+JUMP 6
+LOAD 9
+STORE 4
+JUMP 3
+
+	# result is zero
+LOAD 8
+RTRN 3
+
+# result is negative 	=> qflag is zero 
+# result is postiive 	=> qflag is one
+# remainder is negative => rflag is zero
+# remainder is positive => rflag is one
+# NOW 1 = abs(p), 2 = abs(2)
+
+
+LOAD 2 # store initally (6, 7) == (denominator x1, 1)
+STORE 6
+#while 6 < 1
+# at this line we actually 6 is in r0
+SUB 1
+JNEG 2
+JUMP 8 #endwhile
+LOAD 7
+ADD 7
+STORE 7
+LOAD 6
+ADD 6
+STORE 6
+JUMP -9 # endwhile
+
+# NOW (6, 7) == (denominator x2^k, 2^k) for the least k s.t. 6 >= p
+
+
+
+# we use 8 as accummulator for quotient
+# we use 1 as the accumulator for remainder
+# initially 7 is one so skip first check
+# repeat (until 7 > 0 || 1 > 0)
+# if 6 <= p
+LOAD 6
+SUB 1
+JPOS 8 #skip if
+LOAD 8
+ADD 7
+STORE 8
+LOAD 1
+SUB 6
+STORE 1
+JZERO 9 # if 1 == 0 : BREAK
+LOAD 7
+HALF 
+STORE 7
+JZERO 5 # if 7 == 0 : BREAK
+LOAD 6
+HALF
+STORE 6
+JUMP -16 #endrepeat
+
+# NOW 8 is the quotient and 1 is the remainder
+
+
+# restore the signs
+# if qflag == 0
+LOAD 4 # qflag
+JPOS 12 # skip if
+LOAD 10
+SUB 8
+STORE 8
+# and if p != 0
+LOAD 1
+JZERO 7 # skip if
+# shift
+LOAD 8
+SUB 9
+STORE 8
+LOAD 2
+SUB 1
+STORE 1
+#endif
+
+# if rflag == 0
+LOAD 5 # rflag
+JPOS 4 # skip if
+LOAD 10
+SUB 1
+STORE 1
+
+# DONE
+LOAD 8
+RTRN 3

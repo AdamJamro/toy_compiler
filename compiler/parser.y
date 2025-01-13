@@ -82,10 +82,7 @@ program_all:
 
         // TODO uncomment:
         // TODO ENHANCE postprocessing HERE
-        // scan to cache uncached constants
-
-
-
+        // postprocessing moved to the end of the file
 
 
         // translate procedures block
@@ -99,13 +96,15 @@ program_all:
             output_file << "JMP " << procedures_block_size + 1 << endl; // step over the block
             line_count++;
             //translation_header_offset++;
+
+            for (auto& line : procedures_block) {
+                //parse_line(line, line_count, translation_header_offset, cache_regs); // replaces this_line with actual line number considering header_offset
+                output_file << line << endl;
+                line_count++;
+                line_count += std::ranges::count(line, '\n');;
+            }
         }
-        for (auto& line : procedures_block) {
-            //parse_line(line, line_count, translation_header_offset, cache_regs); // replaces this_line with actual line number considering header_offset
-            output_file << line << endl;
-            line_count++;
-            line_count += std::ranges::count(line, '\n');;
-        }
+
 
         for (auto& line : main_block) {
             //parse_line(line, line_count, translation_header_offset, cache_regs); // replaces this_line with actual line number

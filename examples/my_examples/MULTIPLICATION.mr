@@ -1,0 +1,107 @@
+JUMP 3
+PUT 0
+HALT
+
+SET 1
+STORE 7
+STORE 3 # return line
+
+GET 1
+GET 2
+
+# init flag == 1, 5 == 0
+LOAD 7
+STORE 4
+
+# result will be accumulated in 5 so set it 0
+LOAD 7
+HALF
+STORE 5
+
+# check if x and y are positive and set the flag
+
+	#check p
+LOAD 1
+JPOS 8 # check 2
+JZERO 21 # result is zero
+# 1 is negative
+SUB 1
+SUB 1
+STORE 1
+LOAD 4 # load one into r0
+HALF 	 # load zero into r0
+STORE 4
+
+	#check 2
+LOAD 2
+JPOS 15 # skip check clause
+JZERO 12 # result is zero
+# 2 is negative
+SUB 2
+SUB 2
+STORE 2
+# toggle flag
+LOAD 4
+SUB 7
+JNEG 3 # set flag to 1
+STORE 4 # set flag to 0
+JUMP 6
+LOAD 7
+STORE 4
+JUMP 3
+
+	# result is zero
+LOAD 5 # initally eq to zero
+RTRN 3 # return with 0 == r0	
+
+# result is negative => flag is zero 
+# result is postiive => flag is one
+# NOW 1 = abs(p), 2 = abs(2)
+
+LOAD 1
+SUB 2
+JNEG 2
+JUMP 8 #while
+# swap 1 <=> 2
+LOAD 1
+STORE 6
+LOAD 2
+STORE 1
+LOAD 6
+STORE 2
+JUMP 2 # skip first LOAD 2
+
+# NOW 2 =< 1
+
+# WHILE 2 > 0
+# 2 cannot be zero on first iteration
+# check if 2 (== r0) is odd
+LOAD 2
+HALF
+ADD 0
+SUB 2
+JZERO 4 #skip if block
+LOAD 5
+ADD 1
+STORE 5
+# double 1 and halve 2
+LOAD 1
+ADD 1
+STORE 1
+LOAD 2
+HALF
+STORE 2
+JPOS -13 # 2 != 0 repeat while
+
+# set sign of result in 5
+# if flag is zero swap sign
+LOAD 4
+JPOS 5 # skip sign flip
+LOAD 5
+SUB 5
+SUB 5
+JUMP 2
+LOAD 5 # OPTIONAL as result already in r0
+
+# done p
+RTRN 3 # reutrn with the product in r0

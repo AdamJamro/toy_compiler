@@ -22,6 +22,12 @@
 //     }
 // };
 
+struct math_module {
+public:
+    static const std::string multiplication_path;
+    static const std::string division_path;
+};
+
 struct pid_type;
 class register_table;
 TokenAttribute* parse_expression(TokenAttribute*, TokenAttribute*, const std::string&, const std::string&, long, long);
@@ -29,7 +35,11 @@ TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std:
 void check_for_caches(const std::string&, std::unordered_set<long>&);
 void parse_line(std::string&, long, long, std::unordered_map<std::string, long>&);
 void parse_proc_line(std::string&, const std::list<long>&);
+void parse_math_module_line(std::string&, long, const std::unordered_map<std::string, long> &);
 void postprocess(const std::string&, register_table&);
+std::list<std::string> jump_to_mul_proc(std::string&, long, long, long);
+std::list<std::string> jump_to_div_proc(std::string&, long, long, long);
+std::list<std::string> jump_to_mod_proc(std::string&, long, long, long);
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {
