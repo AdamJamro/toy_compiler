@@ -37,9 +37,9 @@ void parse_line(std::string&, long, long, std::unordered_map<std::string, long>&
 void parse_proc_line(std::string&, const std::list<long>&);
 void parse_math_module_line(std::string&, long, const std::unordered_map<std::string, long> &);
 void postprocess(const std::string&, register_table&);
-std::list<std::string> jump_to_mul_proc(std::string&, long, long, long);
-std::list<std::string> jump_to_div_proc(std::string&, long, long, long);
-std::list<std::string> jump_to_mod_proc(std::string&, long, long, long);
+std::list<std::string> jump_to_mul_proc(const std::string&, long, long, long);
+std::list<std::string> jump_to_div_proc(const std::string&, long, long, long);
+std::list<std::string> jump_to_mod_proc(const std::string&, long, long, long);
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {

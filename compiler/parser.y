@@ -80,11 +80,6 @@ program_all:
         long line_count = 0;
         long translation_header_offset = 0;
 
-        // TODO uncomment:
-        // TODO ENHANCE postprocessing HERE
-        // postprocessing moved to the end of the file
-
-
         // translate procedures block
         if (!procedures_block.empty()) {
             long procedures_block_size = 0; // instead of adding extra one to reach over the last line
@@ -93,7 +88,7 @@ program_all:
                 procedures_block_size += 1 + std::ranges::count(line, '\n');
             }
 
-            output_file << "JMP " << procedures_block_size + 1 << endl; // step over the block
+            output_file << "JUMP " << procedures_block_size + 1 << endl; // step over the block
             line_count++;
             //translation_header_offset++;
 
@@ -107,7 +102,7 @@ program_all:
 
 
         for (auto& line : main_block) {
-            //parse_line(line, line_count, translation_header_offset, cache_regs); // replaces this_line with actual line number
+            // TODO delete:
             /*if (line.find("SET") != string::npos && line.find("[") == string::npos) {
                 const auto rvalue = line.substr(4, line.find("#") == string::npos ? line.length() : line.find("#"));
                 cout << "value: " << rvalue << "; count: " << cached_constants.count(stol(rvalue))  << endl;
@@ -190,6 +185,13 @@ procedures:
         $1->translation.splice($1->translation.end(), $6->translation);
 
         $$->translation.emplace_back("RTRN " + to_string(return_reg));
+
+        // forget this context after moving to the next procedure
+        for (const auto& pid : arguments) {
+            regs.forget_pid(pid);
+        }
+        free($3);
+        free($6);
     }
     | %empty {
         $$ = new TokenAttribute();
@@ -552,11 +554,8 @@ proc_call:
             yyerror("too few arguments in procedure call. expected: " + to_string(arg_no) + ", got: " + to_string(arg_count), yylineno, fun_name);
         }
 
-        // TODO figure out the line_no
-        //const auto this_line = 101010101010;
-        $$->translation.emplace_back("LOAD [this_line + 3]");
+        $$->translation.emplace_back("SET [this_line + 3]");
         $$->translation.emplace_back("STORE " + to_string(regs.at(fun_name)));
-        // TODO cached_constants.insert(this_line + 3);
         $$->translation.emplace_back("JUMP " + to_string(funs.get_line_no(fun_name)) + " - this_line");
         free($3);
     }
@@ -566,7 +565,7 @@ declarations:
     declarations ',' pidentifier {
             const auto& pid = $3->str_value;
             if (regs.contains(pid)) {
-                yyerror("identifier redeclaration", yylineno-1, pid);
+                yyerror("identifier redeclaration", yylineno, pid);
             }
             regs.add(pid);
             $$ = $1;
@@ -576,7 +575,7 @@ declarations:
     | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']' {
             const auto& pid = $3->str_value;
             if (regs.contains(pid)) {
-                yyerror("identifier redeclaration", yylineno-1, pid);
+                yyerror("identifier redeclaration", yylineno, pid);
             }
             try {
                 regs.add_table(pid, $5->long_value, $7->long_value);
@@ -592,7 +591,7 @@ declarations:
     | pidentifier {
             const auto& pid = $1->str_value;
             if (regs.contains(pid)) {
-                yyerror("identifier redeclaration", yylineno-1, pid);
+                yyerror("identifier redeclaration", yylineno, pid);
             }
             regs.add(pid);
             $$ = $1;
@@ -601,7 +600,7 @@ declarations:
     | pidentifier '[' NUMBER ':' NUMBER ']' {
             const auto& pid = $3->str_value;
             if (regs.contains(pid)) {
-                yyerror("identifier redeclaration", yylineno-1, pid);
+                yyerror("identifier redeclaration", yylineno, pid);
             }
             try {
                 regs.add_table($1->str_value, $3->long_value, $5->long_value);
@@ -618,7 +617,7 @@ args_decl:
     args_decl ',' pidentifier {
         const auto& pid = $3->str_value;
         if (regs.contains(pid)) {
-          yyerror("identifier redeclaration", yylineno-1, pid);
+          yyerror("identifier redeclaration", yylineno, pid);
         }
         regs.add(pid);
         $$ = $1;
@@ -628,7 +627,7 @@ args_decl:
     | args_decl ',' T pidentifier {
         const auto& pid = $4->str_value;
         if (regs.contains(pid)) {
-            yyerror("identifier redeclaration", yylineno-1, pid);
+            yyerror("identifier redeclaration", yylineno, pid);
         }
         regs.add_proc_table(pid);
         $$ = $1;
@@ -638,7 +637,7 @@ args_decl:
     | pidentifier {
         const auto& pid = $1->str_value;
         if (regs.contains(pid)) {
-          yyerror("identifier redeclaration", yylineno-1, pid);
+          yyerror("identifier redeclaration", yylineno, pid);
         }
         regs.add(pid);
         $$ = $1;
@@ -647,7 +646,7 @@ args_decl:
     | T pidentifier {
         const auto& pid = $2->str_value;
         if (regs.contains(pid)) {
-            yyerror("identifier redeclaration", yylineno-1, pid);
+            yyerror("identifier redeclaration", yylineno, pid);
         }
         regs.add(pid);
         $$ = $2;
@@ -684,82 +683,22 @@ expression: // simply puts result of the expression into r0
             }
         }
     | value '+' value {
-            const auto val = $1->long_value + $3->long_value;
+        const auto val = $1->long_value + $3->long_value;
 
-            // TODO refactor (maybe pass a reference to cached_constants to parse_expression):
-            if($1->type == LONG || $3->type == LONG) {
-                long new_constant;
-                if ($1->type == LONG && $3->type == LONG) {
-                    new_constant = val;
-                } else if ($1->type == LONG) {
-                    new_constant = $1->long_value;
-                } else if ($3->type == LONG) {
-                    new_constant = $3->long_value;
-                }
-                cached_constants.insert(new_constant); // missed optimization
+        /*if($1->type == LONG || $3->type == LONG) {
+            long new_constant;
+            if ($1->type == LONG && $3->type == LONG) {
+                new_constant = val;
+            } else if ($1->type == LONG) {
+                new_constant = $1->long_value;
+            } else if ($3->type == LONG) {
+                new_constant = $3->long_value;
             }
+            cached_constants.insert(new_constant); // missed optimization
+        }*/
 
-            $$ = parse_expression($1, $3, "ADD", "ADD", val, regs.add_rval());
-
-            /* todo delete:
-            if ($1->type == ADDRESS || $3->type == ADDRESS) {
-                auto swap = $1->type != ADDRESS;
-                auto * const adr_token = swap ? $3 : $1;
-                auto * const other_token = swap ? $1 : $3;
-                $$ = address_token; // 1st address already in r0
-                $$->translation.emplace_back("LOADI 0");
-
-                if (other_token->type == ADDRESS) {
-                    const auto tmp_reg = regs.add_rval();
-                    $$->translation.emplace_back("STORE " + to_string(tmp_reg));
-                    $$->translation.splice($$->translation.end(), other_token->translation);
-                    $$->translation.emplace_back("LOADI 0");
-                    $$->translation.emplace_back("ADD " + to_string(tmp_reg));
-                } else if (other_token->type == STRING) {
-                    $$->translation.emplace_back("ADD " + to_string(other_token->register_no);
-                } else if (other_token->type == LONG) {
-                    $$->translation.emplace_back("ADD [" + to_string(other_token->long_value) + "]");
-                } else {
-                    yyerror("invalid value type inside of expression");
-                }
-                free(other_token);
-            } else if ($1->type == $3->type) {
-                $$ = $1;
-                if ($1->type == STRING) {
-                    // PID + PID
-                    $$->translation.emplace_back("LOAD " + to_string($1->register_no));
-                    $$->translation.emplace_back("ADD " + to_string($3->register_no));
-                } else {
-                    // RVAL + RVAL
-                    $$->long_value = $1->long_value + $3->long_value;
-                    $$->translation.emplace_back("LOAD [" + to_string($$->long_value) + "]");
-                    cached_constants.insert($$->long_value);
-                }
-                free($3);
-            } else {
-                // RVAL + PID
-                TokenAttribute* str_token;
-                TokenAttribute* num_token;
-                if ($1->type == STRING) {
-                    str_token = $1;
-                    num_token = $3;
-                } else {
-                    str_token = $3;
-                    num_token = $1;
-                }
-                $$ = str_token; // ensure $$ has the rval register and string type
-
-                $$->translation.emplace_back("LOAD [" + to_string(num_token->long_value) + "]");
-                cached_constants.insert($$->long_value);
-                $$->translation.emplace_back("ADD " + to_string(str_token->register_no));
-                free(num_token);
-            }
-
-            $$->str_value = "rval";
-            $$->register_no = 0; // RESULT OF THE EXPRESSION STORED IN R0!
-            //EXCESS TOKEN ALREADY CLEANED UP!
-            */
-        }
+        $$ = parse_expression($1, $3, "ADD", "ADD", val, regs.add_rval());
+    }
     | value '-' value {
         const auto val = $1->long_value - $3->long_value;
         $$ = parse_expression($1, $3, "SUB", "RSUB", val, regs.add_rval());

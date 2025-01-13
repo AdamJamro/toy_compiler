@@ -5,6 +5,8 @@ HALT
 SET 1
 STORE 7
 STORE 3 # return line
+HALF
+STORE 8
 
 GET 1
 GET 2
@@ -14,7 +16,6 @@ LOAD 7
 STORE 4
 
 # result will be accumulated in 5 so set it 0
-LOAD 7
 HALF
 STORE 5
 
@@ -22,14 +23,13 @@ STORE 5
 
 	#check p
 LOAD 1
-JPOS 8 # check 2
-JZERO 21 # result is zero
+JPOS 7 # check 2
+JZERO 20 # result is zero
 # 1 is negative
 SUB 1
 SUB 1
 STORE 1
-LOAD 4 # load one into r0
-HALF 	 # load zero into r0
+LOAD 8	 # load zero into r0
 STORE 4
 
 	#check 2
@@ -96,9 +96,8 @@ JPOS -13 # 2 != 0 repeat while
 # set sign of result in 5
 # if flag is zero swap sign
 LOAD 4
-JPOS 5 # skip sign flip
-LOAD 5
-SUB 5
+JPOS 4 # skip sign flip
+LOAD 8
 SUB 5
 JUMP 2
 LOAD 5 # OPTIONAL as result already in r0

@@ -48,7 +48,7 @@ TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2,
             token1->translation.emplace_back(operation + " " + std::to_string(token2->register_no));
         } else {
             // RVAL .. RVAL
-            token1->translation.emplace_back("SET " + std::to_string(value));
+            token1->translation.emplace_back("LOAD [" + std::to_string(value) + "]");
         }
         free(token2);
     } else {
@@ -162,7 +162,7 @@ void postprocess(const std::string& filename, register_table& regs) {
 
     while (std::getline(input_file, line)) {
         file_contents.emplace_back(line);
-        if (line.compare(0,3,"MUL") == 0) {
+        if (line.find("MUL") != std::string::npos) {
             if (multiplication_flag == false) {
                 multiplication_flag = true;
                 while (std::getline(multiplication_file, line)) {
@@ -170,8 +170,9 @@ void postprocess(const std::string& filename, register_table& regs) {
                 }
             }
         }
-        if (line.compare(0,3,"DIV") == 0
-            || line.compare(0, 3, "MOD") == 0) {
+        if (line.find("DIV") != std::string::npos
+            || line.find("MOD") != std::string::npos
+            ) {
             if (division_flag == false) {
                 division_flag = true;
                 while (std::getline(division_file, line)) {
@@ -186,13 +187,12 @@ void postprocess(const std::string& filename, register_table& regs) {
     division_file.close();
     std::ofstream output_file(filename);
 
-    // TODO check for library links before header_offset and cacheing
     if (multiplication_flag) {
         mul_args = last_free_reg;
         last_free_reg = last_free_reg + 6; // NUMBER OF REGISTERS USED BY MUL
     }
     if (division_flag) {
-        mul_args = last_free_reg;
+        div_args = last_free_reg;
         last_free_reg = last_free_reg + 8; // NUMBER OF REGISTERS USED BY DIV
     }
 
@@ -268,17 +268,19 @@ void postprocess(const std::string& filename, register_table& regs) {
         ++it;
         if (translation_line.compare(0, 3, "MUL") == 0) {
             auto translation = jump_to_mul_proc(translation_line, mul_args, mul_proc_line_no, line_count);
+            line_count += translation.size();
             file_contents.splice(current_pos, translation);
             translation_line = "#EMPTY";
-            line_count += translation.size();
-        } else if (translation_line.compare(0, 3, "DIV") == 0) {
+        } else if (translation_line.find("DIV") != std::string::npos) {
             auto translation = jump_to_div_proc(translation_line, div_args, div_proc_line_no, line_count);
-            file_contents.splice(current_pos, translation);
             line_count += translation.size();
-        } else if (translation_line.compare(0, 3, "MOD") == 0) {
+            file_contents.splice(current_pos, translation);
+            translation_line = "#EMPTY";
+        } else if (translation_line.find("MOD") != std::string::npos) {
             auto translation = jump_to_mod_proc(translation_line, div_args, div_proc_line_no, line_count);
-            file_contents.splice(current_pos, translation);
             line_count += translation.size();
+            file_contents.splice(current_pos, translation);
+            translation_line = "#EMPTY";
         } else {
             line_count++;
         }
@@ -289,14 +291,14 @@ void postprocess(const std::string& filename, register_table& regs) {
         if (translation_line.compare(0, 6, "#EMPTY") == 0) {
             continue;
         }
-        //parse_line(translation_line, line_count, header_size, cache_regs);
+        parse_line(translation_line, line_count, header_size, cache_regs);
         output_file << translation_line << std::endl;
         line_count++;
     }
     std::cout << "file counts: " << line_count + 1 << " lines" << std::endl;
 }
 
-std::list<std::string> jump_to_mul_proc(std::string& line, const long reg, const long dest_line_no, const long line_no) {
+std::list<std::string> jump_to_mul_proc(const std::string& line, const long reg, const long dest_line_no, const long line_no) {
     if (const auto pos = line.find("MUL"); pos == std::string::npos) {
         throw std::invalid_argument("The line " + line + " is not a MUL instruction");
     }
@@ -305,37 +307,76 @@ std::list<std::string> jump_to_mul_proc(std::string& line, const long reg, const
         "STORE " + std::to_string(reg),
         "LOAD " + line.substr(4, line.back()),
         "STORE " + std::to_string(reg + 1),
-        "SET " + std::to_string(line_no + 3),
+        "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
         "STORE " + std::to_string(reg + 2),
         "JUMP " + std::to_string(dest_line_no - line_no - 5) // shift since we added 5 lines
     };
     return translation;
 }
 
-std::list<std::string> jump_to_div_proc(std::string& line, const long reg, const long dest_line_no, const long line_no) {
+std::list<std::string> jump_to_div_proc(const std::string& line, const long reg, const long dest_line_no, const long line_no) {
     if (const auto pos = line.find("DIV"); pos == std::string::npos) {
         throw std::invalid_argument("The line is not a DIV instruction");
     }
+    std::list<std::string> translation;
 
-    // std::list translation = {
-    //     "STORE " + std::to_string(reg),
-    //     "LOAD " + line.substr(4, line.back()),
-    //     "STORE " + std::to_string(reg + 1),
-    //     "SET [this_line + 3]" + std::to_string(reg),
-    //     "STORE " + std::to_string(reg + 2),
-    //     "JUMP " + std::to_string(line_no) + " - this_line"
-    // };
-    return {};
+    if (line.find("RDIV") != std::string::npos) {
+        translation = {
+            "STORE " + std::to_string(reg + 1),
+            "LOAD " + line.substr(5, line.back()),
+            "STORE " + std::to_string(reg),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5)
+        };
+    } else { // DIV
+        // if (line.compare(0, 5, "DIV 2") == 0) {
+            // translation = {"HALF"};
+        // } else if (line.compare(0, 5, "DIV 4")) {
+            // translation = {"HALF", "HALF"};
+        // } else if (line.compare(0, 5, "DIV 8")) {
+            // translation = {"HALF", "HALF", "HALF"};
+        // } else {
+            translation = {
+                "STORE " + std::to_string(reg),
+                "LOAD " + line.substr(4, line.back()),
+                "STORE " + std::to_string(reg + 1),
+                "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+                "STORE " + std::to_string(reg + 2),
+                "JUMP " + std::to_string(dest_line_no - line_no - 5)
+            };
+        // }
+    }
+    return translation;
 }
 
-std::list<std::string> jump_to_mod_proc(std::string& line, const long reg, const long dest_line_no, const long line_no) {
+std::list<std::string> jump_to_mod_proc(const std::string& line, const long reg, const long dest_line_no, const long line_no) {
     if (const auto pos = line.find("MOD"); pos == std::string::npos) {
         throw std::invalid_argument("The line is not a MOD instruction");
     }
+    std::list<std::string> translation;
 
-    auto translation = jump_to_div_proc(line, reg, dest_line_no, line_no);
-    translation.emplace_back("LOAD " + std::to_string(reg));
-
+    if (line.find("RMOD") != std::string::npos) {
+        translation = {
+            "STORE " + std::to_string(reg + 1),
+            "LOAD " + line.substr(5, line.back()),
+            "STORE " + std::to_string(reg),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5),
+            "LOAD " + std::to_string(reg), // here is the remainder stored
+        };
+    } else { // regular MOD
+        translation = {
+            "STORE " + std::to_string(reg),
+            "LOAD " + line.substr(4, line.back()),
+            "STORE " + std::to_string(reg + 1),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5),
+            "LOAD " + std::to_string(reg), // here is the remainder stored
+        };
+    }
     return translation;
 }
 
@@ -381,7 +422,7 @@ void parse_line(std::string& line, const long line_no, const long header_offset,
     //replace this_line with actual line_no
     if (const auto pos = line.find("this_line"); pos != std::string::npos) {
         if (const auto pos_proc_call_load_line = line.find("[this_line + 3]"); pos_proc_call_load_line != std::string::npos) {
-            line.replace(pos_proc_call_load_line + 1, 13, std::to_string(line_no + 3));
+            line.replace(pos_proc_call_load_line, 15, std::to_string(line_no + 3));
         }
         if (const auto pos_proc_call_jump_to_proc = line.find("JUMP "); pos_proc_call_jump_to_proc != std::string::npos) {
             const int value_length = line.find(" -") - line.front();
@@ -401,11 +442,11 @@ void parse_line(std::string& line, const long line_no, const long header_offset,
         const auto end_pos = line.find("]", pos);
         const auto val_length = end_pos - pos - 1;
         const auto& cached_value = line.substr(pos + 1, val_length);
-        std::cout << "line: " << line << std::endl;
-        std::cout << "cached value: " << cached_value << std::endl;
+        //std::cout << "line: " << line << std::endl;
+        //std::cout << "cached value: " << cached_value << std::endl;
         line.replace(pos, val_length + 2, std::to_string(cache_regs.at(cached_value)) + "\t# [" + cached_value + "]");
         // TODO delete this line:
-        line.append("\t# [" + cached_value + "] " + std::to_string(std::count(line.begin(), line.end(), '\n')));
+        //line.append("\t# [" + cached_value + "] " + std::to_string(std::count(line.begin(), line.end(), '\n')));
     }
 }
 
@@ -516,10 +557,10 @@ int register_table::assign_registers(const int size) {
     if (free_registers.empty()) {
         throw std::runtime_error("MEMORY ERROR: OUT OF REGISTERS");
     }
-    // std::cout << "assignment size: "<<size<<std::endl<<"free regs before oparation:" << std::endl;
-    // for (const auto& [first, last] : free_registers) {
-    //     printf("from %lld to %lld\n", first, last);
-    // }
+    std::cout << "assignment size: "<<size<<std::endl<<"free regs before oparation:" << std::endl;
+    for (const auto& [first, last] : free_registers) {
+        printf("from %lld to %lld\n", first, last);
+    }
 
     auto it = free_registers.begin(); // first free interval of registers
     const auto end = free_registers.end();
@@ -531,6 +572,7 @@ int register_table::assign_registers(const int size) {
     if (it == end) {
         throw std::runtime_error("FRAGMENTATION FAULT: OUT OF REGISTERS");
     }
+
     const auto reg = it->first;
     free_registers.erase(it);
     if (it->second - it->first > size) {
@@ -538,10 +580,10 @@ int register_table::assign_registers(const int size) {
         free_registers.insert(chopped_range);
     }
 
-    // std::cout << "free regs after oparation:" << std::endl;
-    // for (const auto& [first, last] : free_registers) {
-    //     printf("from %lld to %lld\n", first, last);
-    // }
+    std::cout << "free regs after oparation:" << std::endl;
+    for (const auto& [first, last] : free_registers) {
+        printf("from %lld to %lld\n", first, last);
+    }
 
     // last register is the first unused by the assigment [first, last)
     first_untouched_register = std::max(first_untouched_register, static_cast<long>(it->first + size));
@@ -559,27 +601,28 @@ void register_table::remove(const std::string& pid) { // maybe free_pid() ?
     int to = from + size;
     auto range = std::make_pair(from, to);
 
-    auto lower_bound = free_registers.lower_bound(range);
-    lower_bound = (lower_bound == free_registers.begin())? lower_bound : --lower_bound;
-    const auto upper_bound = free_registers.upper_bound(range);
-    //std::cout << "OOUOUOUOUO : Lb.1: " << lower_bound->first << ", Lb.2: " << lower_bound->second <<", Ub.1: " << upper_bound->first <<", Ub.2: " <<upper_bound->second << std::endl;
-    if (lower_bound->second < reg || reg < upper_bound->first - 1) {
-        free_registers.insert(range);
-    } else if (lower_bound->second + 1 == upper_bound->first) {
-        range.first = lower_bound->first;
-        range.second = upper_bound->second;
-        free_registers.erase(lower_bound);
-        free_registers.erase(upper_bound);
-        free_registers.insert(range);
-    } else if (lower_bound->second == reg) {
-        range.first = lower_bound->first;
-        free_registers.erase(lower_bound);
-        free_registers.insert(range);
-    } else if (upper_bound->first - 1 == reg) {
-        range.second = upper_bound->first;
-        free_registers.erase(upper_bound);
-        free_registers.insert(range);
-    }
+    // TODO uncomment (and find a bug)
+    // auto lower_bound = free_registers.lower_bound(range);
+    // lower_bound = (lower_bound == free_registers.begin())? lower_bound : --lower_bound;
+    // const auto upper_bound = free_registers.upper_bound(range);
+    // //std::cout << "OOUOUOUOUO : Lb.1: " << lower_bound->first << ", Lb.2: " << lower_bound->second <<", Ub.1: " << upper_bound->first <<", Ub.2: " <<upper_bound->second << std::endl;
+    // if (lower_bound->second < reg || reg < upper_bound->first - 1) {
+    //     free_registers.insert(range);
+    // } else if (lower_bound->second + 1 == upper_bound->first) {
+    //     range.first = lower_bound->first;
+    //     range.second = upper_bound->second;
+    //     free_registers.erase(lower_bound);
+    //     free_registers.erase(upper_bound);
+    //     free_registers.insert(range);
+    // } else if (lower_bound->second == reg) {
+    //     range.first = lower_bound->first;
+    //     free_registers.erase(lower_bound);
+    //     free_registers.insert(range);
+    // } else if (upper_bound->first - 1 == reg) {
+    //     range.second = upper_bound->first;
+    //     free_registers.erase(upper_bound);
+    //     free_registers.insert(range);
+    // }
 
     table.erase(pid);
 
