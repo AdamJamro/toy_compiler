@@ -32,6 +32,7 @@ struct pid_type;
 class register_table;
 TokenAttribute* parse_expression(TokenAttribute*, TokenAttribute*, const std::string&, const std::string&, long, long);
 TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, bool, int, int, std::unordered_set<long>&);
+std::pair<std::list<std::string>, std::list<std::string>> parse_for_loop(const TokenAttribute*, const TokenAttribute*, long, long, std::unordered_set<long>&, register_table&, const bool);
 void check_for_caches(const std::string&, std::unordered_set<long>&);
 void parse_line(std::string&, long, long, std::unordered_map<std::string, long>&);
 void parse_proc_line(std::string&, const std::list<long>&);
@@ -40,6 +41,7 @@ void postprocess(const std::string&, register_table&);
 std::list<std::string> jump_to_mul_proc(const std::string&, long, long, long);
 std::list<std::string> jump_to_div_proc(const std::string&, long, long, long);
 std::list<std::string> jump_to_mod_proc(const std::string&, long, long, long);
+
 
 struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {

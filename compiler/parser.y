@@ -341,6 +341,7 @@ command:
             $$ = $2;
 
             const auto tid_register = regs.at($2->str_value);
+            bool fast_loop = true;
 
             // examine illegal alteration of temporary-identifier inside the loop
             auto line_count = 0;
@@ -350,6 +351,15 @@ command:
                 (line.compare(0, 4 + $2->str_value.length(), "GET " + to_string(tid_register)) == 0)) {
                     yyerror("for-loop iterator modification inside the loop is forbidden!", $2->lineno + line_count, $2->str_value);
                 }
+
+                const auto str_tid_register = to_string(tid_register);
+                if (
+                    (str_tid_register.length() < line.length() &&
+                    std::equal(str_tid_register.rbegin(), str_tid_register.rend(), line.rbegin()))
+                    ) {
+                    fast_loop = false;
+                    cout << "warning fast_loop disabled. LINE: " << line << endl;
+                }
             }
             // check for invalid range
             if ($4->type == LONG && $6->type == LONG &&
@@ -358,95 +368,8 @@ command:
                 yyerror("invalid range in for loop", $2->lineno, error_msg);
             }
 
-            // create for_head
-            string CONDITIONAL_JUMP; // used to remember if we did v1 - v2 or v2 - v1 to decide when to stop the loop in the footer
-            list<string> for_head;
-            list<string> for_footer;
-            if ($4->type == LONG && $6->type == LONG) { // SPECIAL CASE [rVAL, rVAL] can be optimized like:
-                for_head = {
-                    "LOAD [" + to_string($4->long_value - $6->long_value) + "]", // store only one value v == v1-v2 <= 0
-                    "STORE " + to_string(tid_register),
-                };
-                CONDITIONAL_JUMP = "JPOS";
-                cached_constants.insert($4->long_value - $6->long_value);
-            } else if ($4->type == LONG && $6->type == STRING) {
-                for_head = {
-                    "LOAD [" + to_string($4->long_value) + "]",
-                    "SUB "  + to_string($6->register_no),
-                    "STORE "+ to_string(tid_register),
-                };
-                CONDITIONAL_JUMP = "JPOS";
-                cached_constants.insert($4->long_value);
-            } else if ($4->type == STRING && $6->type == LONG) {
-                for_head = {
-                    "LOAD [" + to_string($6->long_value) + "]",
-                    "SUB "  + to_string($4->register_no),
-                    "STORE "+ to_string(tid_register),
-                };
-                CONDITIONAL_JUMP = "JNEG";
-                cached_constants.insert($6->long_value);
-            } else if ($4->type == STRING && $6->type == STRING) {
-                for_head = {
-                    "LOAD " + to_string($6->register_no),
-                    "SUB "  + to_string($4->register_no),
-                    "STORE "+ to_string(tid_register),
-                };
-                CONDITIONAL_JUMP = "JNEG";
-            } else if ($4->type == ADDRESS && $6->type == ADDRESS) {
-                const auto tmp_reg = regs.add_rval();
-                for_head = $4->translation; // load address1 to r0
-                for_head.emplace_back("LOADI 0");
-                for_head.emplace_back("STORE " + to_string(tmp_reg));
-                for_head.splice(for_head.end(), $6->translation);
-                for_head.emplace_back("LOADI 0");
-                for_head.emplace_back("SUB "   + to_string(tmp_reg));
-                CONDITIONAL_JUMP = "JPOS";
-            } else if ($4->type == ADDRESS && $6->type == LONG) {
-                // TODO important not to forget that simple SET cache optimization fails for this case
-                const auto tmp_reg = regs.add_rval();
-                for_head = $4->translation;
-                for_head.emplace_back("LOADI 0");
-                for_head.emplace_back("STORE " + to_string(tmp_reg));
-                for_head.emplace_back("LOAD [" + to_string($6->long_value) + "]");
-                for_head.emplace_back("SUB "   + to_string(tmp_reg));
-                CONDITIONAL_JUMP = "JNEG";
-                cached_constants.insert($6->long_value);
-            } else if ($4->type == LONG && $6->type == ADDRESS) {
-                const auto tmp_reg = regs.add_rval();
-                for_head = $6->translation;
-                for_head.emplace_back("LOADI 0");
-                for_head.emplace_back("STORE " + to_string(tmp_reg));
-                for_head.emplace_back("LOAD [" + to_string($4->long_value) + "]");
-                for_head.emplace_back("SUB "   + to_string(tmp_reg));
-                CONDITIONAL_JUMP = "JPOS";
-                cached_constants.insert($4->long_value);
-            } else if ($4->type == ADDRESS && $6->type == STRING) {
-                for_head = {
-                    "LOADI 0",
-                    "SUB " + to_string($6->register_no),
-                };
-                for_head.splice(for_head.begin(), $4->translation);
-                CONDITIONAL_JUMP = "JPOS";
-            } else if ($4->type == STRING && $6->type == ADDRESS) {
-                for_head = {
-                    "LOADI 0",
-                    "SUB "  + to_string($4->register_no),
-                };
-                for_head.splice(for_head.begin(), $6->translation);
-                CONDITIONAL_JUMP = "JNEG";
-            }
-            // conditional jump over the command block will soon be added down below!
-
-            for_footer = {
-                "LOAD " + to_string(tid_register),
-                CONDITIONAL_JUMP + " 5", // exit for
-                "ADD [1]",
-                "STORE " + to_string(tid_register)
-            };
-            cached_constants.insert(1);// we need to cache one
-
-            for_footer.emplace_back("JUMP -" + to_string(for_footer.size() + $8->translation.size()));
-            // jump to the first line of commands inside the loop ($8->translation)
+            auto loop_body_size = $8->translation.size();
+            auto [for_head, for_footer] = parse_for_loop($4, $6, tid_register, loop_body_size, cached_constants, regs, fast_loop);
 
             //comments
             for_head.front().append("\t# for loop head");
@@ -455,11 +378,8 @@ command:
 
             //translation scheme
             $$->translation = for_head;
-            if ($4->type != LONG || $6->type != LONG) {
-                $$->translation.emplace_back(CONDITIONAL_JUMP + " " + to_string($8->translation.size() + for_footer.size() + 1)); // jump out of the loop
-            }
             $$->translation.splice($$->translation.end(), $8->translation);
-            $$->translation.splice($$->translation.end(), for_footer); // most important part of the loop
+            $$->translation.splice($$->translation.end(), for_footer); // most heavy part of the loop
 
             //cleanup
             regs.remove($2->str_value); // SAME AS regs.remove(tid_register);

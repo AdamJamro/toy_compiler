@@ -121,7 +121,7 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
         auto const * const rval_token = swap_needed? token2 : token1;
 
         if (rval_token->long_value != 0) {
-            token1->translation.emplace_back("SET [" + std::to_string(rval_token->long_value) + "]");
+            token1->translation.emplace_back("LOAD [" + std::to_string(rval_token->long_value) + "]");
             token1->translation.emplace_back("SUB " + std::to_string(str_token->register_no));
             cached_constants.insert(rval_token->long_value);
         } else {
@@ -141,6 +141,226 @@ TokenAttribute* parse_condition(TokenAttribute* token1, TokenAttribute* token2, 
 
     free(token2);
     return token1;
+}
+
+// returns (for_header, for_footer)
+std::pair<std::list<std::string>, std::list<std::string>> parse_for_loop(const TokenAttribute* token1, const TokenAttribute* token2, const long tid_iterator_register, const long loop_body_size, std::unordered_set<long>& cached_constants, register_table& regs, const bool fast_loop) {
+    std::string CONDITIONAL_JUMP; // used to remember if we did v1 - v2 or v2 - v1 to decide when to stop the loop in the footer
+    std::list<std::string> for_header;
+    std::list<std::string> for_footer;
+    long tid_upper_limit_register;
+
+    // create for_head
+    if (token1->type == LONG && token2->type == LONG) { // SPECIAL CASE [rVAL, rVAL] can be optimized like:
+        if (fast_loop) {
+            for_header = {
+                 "LOAD [" + std::to_string(token1->long_value - token2->long_value) + "]", // store only one value v == v1-v2 <= 0
+                 "STORE " + std::to_string(tid_iterator_register),
+            };
+            CONDITIONAL_JUMP = "JPOS";
+            cached_constants.insert(token1->long_value - token2->long_value);
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = {
+                "LOAD [" + std::to_string(token1->long_value) + "]",
+                "STORE " + std::to_string(tid_iterator_register),
+                "LOAD [" + std::to_string(token2->long_value) + "]",
+                "STORE " + std::to_string(tid_upper_limit_register),
+                "SUB " + std::to_string(tid_iterator_register),
+            };
+            cached_constants.insert(token1->long_value);
+            cached_constants.insert(token2->long_value);
+            CONDITIONAL_JUMP = "JNEG";
+        }
+    } else if (token1->type == LONG && token2->type == STRING) {
+        if (fast_loop) {
+            for_header = {
+            "LOAD ["+ std::to_string(token1->long_value) + "]",
+            "SUB "  + std::to_string(token2->register_no),
+            "STORE "+ std::to_string(tid_iterator_register),
+            };
+            CONDITIONAL_JUMP = "JPOS";
+            cached_constants.insert(token1->long_value);
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = {
+                "LOAD [" + std::to_string(token1->long_value) + "]",
+                "STORE " + std::to_string(tid_iterator_register),
+                "LOAD " + std::to_string(token2->register_no),
+                "STORE " + std::to_string(tid_upper_limit_register),
+                "SUB " + std::to_string(tid_iterator_register),
+            };
+            cached_constants.insert(token1->long_value);
+            cached_constants.insert(token2->long_value);
+            CONDITIONAL_JUMP = "JNEG";
+        }
+    } else if (token1->type == STRING && token2->type == LONG) {
+        if (fast_loop) {
+            for_header = {
+                "LOAD [" + std::to_string(token2->long_value) + "]",
+                "SUB "   + std::to_string(token1->register_no),
+                "STORE " + std::to_string(tid_iterator_register),
+            };
+            CONDITIONAL_JUMP = "JNEG";
+            cached_constants.insert(token2->long_value);
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = {
+                "LOAD " + std::to_string(token1->register_no),
+                "STORE " + std::to_string(tid_iterator_register),
+                "LOAD [" + std::to_string(token2->long_value) + "]",
+                "STORE " + std::to_string(tid_upper_limit_register),
+                "SUB " + std::to_string(tid_iterator_register),
+            };
+            cached_constants.insert(token2->long_value);
+            CONDITIONAL_JUMP = "JNEG";
+        }
+    } else if (token1->type == STRING && token2->type == STRING) {
+        if (fast_loop) {
+            for_header = {
+                "LOAD " + std::to_string(token2->register_no),
+                "SUB "  + std::to_string(token1->register_no),
+                "STORE "+ std::to_string(tid_iterator_register),
+            };
+            CONDITIONAL_JUMP = "JNEG";
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = {
+                "LOAD " + std::to_string(token1->register_no),
+                "STORE "+ std::to_string(tid_iterator_register),
+                "LOAD "  + std::to_string(token2->register_no),
+                "STORE " + std::to_string(tid_upper_limit_register),
+                "SUB " + std::to_string(tid_iterator_register),
+            };
+            CONDITIONAL_JUMP = "JNEG";
+        }
+    } else if (token1->type == ADDRESS && token2->type == ADDRESS) {
+        if (fast_loop) {
+            const auto tmp_reg = regs.add_rval();
+            for_header = token1->translation; // load address1 to r0
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("STORE " + std::to_string(tmp_reg));
+            for_header.splice(for_header.end(), static_cast<std::list<std::string>>(token2->translation));
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("SUB "   + std::to_string(tmp_reg));
+            for_header.emplace_back("STORE "   + std::to_string(tid_iterator_register));
+            CONDITIONAL_JUMP = "JPOS";
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = token1->translation; // load address1 to r0
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("STORE " + std::to_string(tid_iterator_register));
+            for_header.splice(for_header.end(), static_cast<std::list<std::string>>(token2->translation));
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("STORE " + std::to_string(tid_upper_limit_register));
+            for_header.emplace_back("SUB " + std::to_string(tid_iterator_register));
+            CONDITIONAL_JUMP = "JNEG";
+        }
+    } else if (token1->type == ADDRESS && token2->type == LONG) {
+        if (fast_loop) {
+            // TODO important not to forget that simple SET cache optimization fails for this case
+            // allegedly, now i'm hesitant about it
+            for_header = token1->translation;
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("SUB [" + std::to_string(token2->long_value) + "]");
+            for_header.emplace_back("STORE "   + std::to_string(tid_iterator_register));
+            CONDITIONAL_JUMP = "JNEG";
+            cached_constants.insert(token2->long_value);
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = token1->translation; // load address1 to r0
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("STORE " + std::to_string(tid_iterator_register));
+            for_header.emplace_back("LOAD [" + std::to_string(token2->long_value) + "]");
+            for_header.emplace_back("STORE " + std::to_string(tid_upper_limit_register));
+            cached_constants.insert(token2->long_value);
+            for_header.emplace_back("SUB " + std::to_string(tid_iterator_register));
+            CONDITIONAL_JUMP = "JNEG";
+        }
+    } else if (token1->type == LONG && token2->type == ADDRESS) {
+        if (fast_loop) {
+            for_header = token2->translation;
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("SUB [" + std::to_string(token1->long_value) + "]");
+            for_header.emplace_back("STORE " + std::to_string(tid_iterator_register));
+            CONDITIONAL_JUMP = "JPOS";
+            cached_constants.insert(token1->long_value);
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = token2->translation; // load address1 to r0
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("STORE " + std::to_string(tid_upper_limit_register));
+            for_header.emplace_back("LOAD [" + std::to_string(token1->long_value) + "]");
+            for_header.emplace_back("STORE " + std::to_string(tid_iterator_register));
+            cached_constants.insert(token1->long_value);
+            for_header.emplace_back("SUB " + std::to_string(tid_upper_limit_register));
+            CONDITIONAL_JUMP = "JPOS";
+        }
+    } else if (token1->type == ADDRESS && token2->type == STRING) {
+        if (fast_loop) {
+            for_header = token1->translation; // load address1 to r0
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("SUB " + std::to_string(token2->register_no));
+            for_header.emplace_back("STORE "+ std::to_string(tid_iterator_register));
+            CONDITIONAL_JUMP = "JPOS";
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = token1->translation; // load address1 to r0
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("STORE " + std::to_string(tid_iterator_register));
+            for_header.emplace_back("LOAD " + std::to_string(token2->register_no));
+            for_header.emplace_back("STORE " + std::to_string(tid_upper_limit_register));
+            for_header.emplace_back("SUB " + std::to_string(tid_iterator_register));
+            CONDITIONAL_JUMP = "JNEG";
+        }
+    } else if (token1->type == STRING && token2->type == ADDRESS) {
+        if (fast_loop) {
+            for_header = token2->translation; // load address1 to r0
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("SUB " + std::to_string(token1->register_no));
+            for_header.emplace_back("STORE "+ std::to_string(tid_iterator_register));
+            CONDITIONAL_JUMP = "JNEG";
+        } else {
+            tid_upper_limit_register = regs.add(); // never frees the register
+            for_header = token2->translation; // load address1 to r0
+            for_header.emplace_back("LOADI 0");
+            for_header.emplace_back("STORE " + std::to_string(tid_upper_limit_register));
+            for_header.emplace_back("LOAD " + std::to_string(token2->register_no));
+            for_header.emplace_back("STORE " + std::to_string(tid_iterator_register));
+            // first cond check is necessary and will be added when footer is complete
+            for_header.emplace_back("SUB " + std::to_string(tid_upper_limit_register));
+            CONDITIONAL_JUMP = "JPOS";
+        }
+    }
+    // conditional jump over the command block will soon be added down below!
+    if (fast_loop) {
+        for_footer = {
+            "LOAD " + std::to_string(tid_iterator_register),
+            "ADD [1]",
+            CONDITIONAL_JUMP + " 3", // exit for
+            "STORE " + std::to_string(tid_iterator_register),
+            "JUMP -" + std::to_string(4 + loop_body_size), // jump to the first line of commands inside the loop ($8->translation)
+        };
+    } else {
+        for_footer = {
+            "LOAD " + std::to_string(tid_iterator_register),
+            "ADD [1]",
+            "STORE " + std::to_string(tid_iterator_register),
+            "SUB " + std::to_string(tid_upper_limit_register),
+            "JPOS 2", // exit for
+            "JUMP -" + std::to_string(5 + loop_body_size), // jump to the first line of commands inside the loop ($8->translation)
+        };
+    }
+    // we know exactly if the loop should be executed at least once if it is long long loop
+    if (token1->type != LONG || token2->type != LONG) {
+        for_header.emplace_back(CONDITIONAL_JUMP + " " + std::to_string(loop_body_size + for_footer.size() + 1));
+        // jump out of the loop
+    }
+
+    cached_constants.insert(1);// we need to cache one for the footer
+
+
+    return std::make_pair(for_header, for_footer);
 }
 
 void postprocess(const std::string& filename, register_table& regs) {
@@ -574,19 +794,24 @@ int register_table::assign_registers(const int size) {
     }
 
     const auto reg = it->first;
+    const auto range_end = it->second;
     free_registers.erase(it);
-    if (it->second - it->first > size) {
-        const auto chopped_range = std::make_pair(it->first + size, it->second);
+    if (range_end - reg > size) {
+        const auto chopped_range = std::make_pair(reg + size, range_end);
         free_registers.insert(chopped_range);
     }
+
+
+    // last register is the first unused by the assigment [first, last)
+    first_untouched_register = std::max(first_untouched_register, static_cast<long>(free_registers.begin()->first));
+    first_untouched_register = std::max(first_untouched_register, static_cast<long>(reg + size));
+
 
     std::cout << "free regs after oparation:" << std::endl;
     for (const auto& [first, last] : free_registers) {
         printf("from %lld to %lld\n", first, last);
     }
-
-    // last register is the first unused by the assigment [first, last)
-    first_untouched_register = std::max(first_untouched_register, static_cast<long>(it->first + size));
+    std::cout << "first_untouched_reg" << first_untouched_register << std::endl;
     return reg;
 }
 
@@ -682,11 +907,16 @@ int register_table::add_rval(void) { // maybe rename to add_tmp or get_free_regi
     if (free_registers.empty()) {
         throw std::runtime_error("ERROR: OUT OF REGISTERS");
     }
-    const auto it = free_registers.begin();
-    const auto reg = it->first;
 
-    first_untouched_register = std::max(first_untouched_register, static_cast<long>(reg + 1));
+    const auto reg = assign_register();
     return reg;
+    // deprecated (or find the bug):
+
+    // const auto it = free_registers.begin();
+    // const auto reg = it->first;
+    //
+    // first_untouched_register = std::max(first_untouched_register, static_cast<long>(reg + 1));
+    // return reg;
 }
 
 pid_type register_table::get_pid(const std::string& pid) const {
