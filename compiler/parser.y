@@ -63,7 +63,7 @@ unordered_set<long> cached_constants = {};
     TokenAttribute* attr;
 }
 
-%type <attr> main procedures proc_head proc_call args_decl args declarations identifier tidentifier expression value command commands condition
+%type <attr> main procedures proc_head proc_call args_decl args declarations identifier tidentifier expression value command commands condition signed_number
 %token <attr> NUMBER pidentifier
 %token ASSIGNMENT NEQ GEQ LEQ
 %token BEGIN_KW
@@ -142,13 +142,15 @@ procedures:
 
         // parse commands
         // switch arguments values into references
+        list<long> argument_registers = {};
+        for (const auto& pid : arguments) {
+            argument_registers.emplace_back(regs.at(pid));
+        }
+        auto proc_line_count = 0;
         for (auto& line : proc_commands) {
-            list<long> argument_registers = {};
-            for (const auto& pid : arguments) {
-                argument_registers.emplace_back(regs.at(pid));
-            }
-
-            parse_proc_line(line, argument_registers);
+            parse_proc_line(line, proc_commands, argument_registers, proc_line_count);
+            proc_line_count++;
+            proc_line_count += std::ranges::count(line, '\n');
         }
 
         $$ = $1;
@@ -170,6 +172,7 @@ procedures:
     | procedures PROCEDURE proc_head IS BEGIN_KW commands END {
         const auto& fun_name = $3->str_value;
         const auto& arguments = $3->translation;
+        auto& proc_commands = $6->translation;
 
         if (regs.contains(fun_name)){
             yyerror("procedure's name is ambiguous", yylineno, fun_name);
@@ -177,13 +180,25 @@ procedures:
         const auto return_reg = regs.add(fun_name);
 
         // store procedure's data
-        const auto fun_line_no = $1->translation.size() + 1;
+        const auto fun_line_no = $1->translation.size();
         const auto first_arg = regs.at(arguments.front());
         funs.add(fun_name, fun_line_no, arguments.size(), first_arg);
 
+        // parse commands
+        // switch arguments values into references
+        list<long> argument_registers = {};
+        for (const auto& pid : arguments) {
+            argument_registers.emplace_back(regs.at(pid));
+        }
+        auto proc_line_count = 0;
+        for (auto& line : proc_commands) {
+            parse_proc_line(line, proc_commands, argument_registers, proc_line_count);
+            proc_line_count++;
+            proc_line_count += std::ranges::count(line, '\n');
+        }
+
         $$ = $1;
         $1->translation.splice($1->translation.end(), $6->translation);
-
         $$->translation.emplace_back("RTRN " + to_string(return_reg));
 
         // forget this context after moving to the next procedure
@@ -387,7 +402,76 @@ command:
             free($6);
             free($8);
         }
-    | FOR tidentifier FROM value DOWNTO value DO commands ENDFOR
+    | FOR tidentifier FROM value DOWNTO value DO commands ENDFOR {
+             $$ = $2;
+
+             const auto tid_register = regs.at($2->str_value);
+             bool fast_loop = true;
+
+             // examine illegal alteration of temporary-identifier inside the loop
+             auto line_count = 0;
+             for (const auto& line : $8->translation) {
+                 line_count++;
+                 if ((line.compare(0, 6 + $2->str_value.length(), "STORE " + to_string(tid_register)) == 0) ||
+                 (line.compare(0, 4 + $2->str_value.length(), "GET " + to_string(tid_register)) == 0)) {
+                     yyerror("for-loop iterator modification inside the loop is forbidden!", $2->lineno + line_count, $2->str_value);
+                 }
+
+                 const auto str_tid_register = to_string(tid_register);
+                 const auto stripped_line = line.find("\t#") == std::string::npos ? line : line.substr(0, line.find("\t#")) ;
+
+                 if (
+                     (str_tid_register.length() < line.length() &&
+                     std::equal(str_tid_register.rbegin(), str_tid_register.rend(), stripped_line.rbegin()))
+                     ) {
+                     fast_loop = false;
+                     cout << "warning fast_loop disabled. LINE: " << line << endl;
+                 }
+             }
+             // check for invalid range
+             if ($4->type == LONG && $6->type == LONG &&
+                 $4->long_value < $6->long_value) {
+                 const auto error_msg = "FROM " + to_string($6->long_value) + " TO " + to_string($4->long_value);
+                 yyerror("invalid range in downto for loop", $2->lineno, error_msg);
+             }
+
+             auto loop_body_size = $8->translation.size();
+             auto [for_head, for_footer] = parse_for_loop($4, $6, tid_register, loop_body_size, cached_constants, regs, fast_loop);
+             // WE NEED TO REVERSE THE LOOP
+             for (auto& header_line : for_head) {
+                 if (header_line.find("JPOS" ) != string::npos) {
+                     header_line.replace(0, 4, "JNEG");
+                 } else if (header_line.find("JNEG") != string::npos) {
+                     header_line.replace(0, 4, "JPOS");
+                 }
+              }
+             for (auto& footer_line : for_footer) {
+                if (footer_line.find("ADD [1]") != string::npos) {
+                     footer_line.replace(0, 7, "SUB [1]");
+                } else if (footer_line.find("JPOS") != string::npos) {
+                    footer_line.replace(0, 4, "JNEG");
+                } else if (footer_line.find("JNEG") != string::npos) {
+                    footer_line.replace(0, 4, "JPOS");
+                }
+             }
+
+
+             //comments
+             for_head.front().append("\t# for loop head");
+             for_footer.front().append("\t# for loop cond-footer");
+             $8->translation.front().append("\t# for loop commands block");
+
+             //translation scheme
+             $$->translation = for_head;
+             $$->translation.splice($$->translation.end(), $8->translation);
+             $$->translation.splice($$->translation.end(), for_footer); // most heavy part of the loop
+
+             //cleanup
+             regs.remove($2->str_value); // SAME AS regs.remove(tid_register);
+             free($4);
+             free($6);
+             free($8);
+         }
     | proc_call ';' {
             $$ = $1;
     }
@@ -456,11 +540,14 @@ proc_call:
             if (arg_count > arg_no) {
                 yyerror("too many arguments in procedure call", yylineno, fun_name);
             }
+            if (!regs.contains(pid)) {
+                yyerror("undeclared identifier in procedure call", yylineno + 1, pid);
+            }
 
             const auto& pid_type = regs.get_pid(pid);
-            if (pid_type.size == 1) {
+            if (pid_type.size == 1) { // pid
                 $$->translation.emplace_back("LOAD [" + to_string(regs.at(pid)) + "]" + "\t# passing address");
-            } else {
+            } else { // reference to an array
                 $$->translation.emplace_back("LOAD [" + to_string(regs.at(pid) - pid_type.index_shift) + "]\t# passing address of an array");
             }
 
@@ -492,7 +579,7 @@ declarations:
             $$->translation.emplace_back(pid);
             free($3);
         }
-    | declarations ',' pidentifier '[' NUMBER ':' NUMBER ']' {
+    | declarations ',' pidentifier '[' signed_number ':' signed_number ']' {
             const auto& pid = $3->str_value;
             if (regs.contains(pid)) {
                 yyerror("identifier redeclaration", yylineno, pid);
@@ -517,7 +604,7 @@ declarations:
             $$ = $1;
             $$->translation = {pid};
         }
-    | pidentifier '[' NUMBER ':' NUMBER ']' {
+    | pidentifier '[' signed_number ':' signed_number ']' {
             const auto& pid = $3->str_value;
             if (regs.contains(pid)) {
                 yyerror("identifier redeclaration", yylineno, pid);
@@ -568,7 +655,7 @@ args_decl:
         if (regs.contains(pid)) {
             yyerror("identifier redeclaration", yylineno, pid);
         }
-        regs.add(pid);
+        regs.add_proc_table(pid);
         $$ = $2;
         $$->translation = {pid};
     }
@@ -707,8 +794,20 @@ condition: // evaluates condition and leaves a blank jump to a "else" clause (sp
         }
     ;
 
-value:
+signed_number:
     NUMBER {
+            $$ = $1;
+            $$->type = LONG;
+        }
+    | '-' NUMBER {
+            $$ = $2;
+            $$->long_value = -$2->long_value;
+            $$->type = LONG;
+        }
+    ;
+
+value:
+    signed_number {
             $$ = $1;
             //$$->str_value = "rval";
             $$->type = LONG;
@@ -753,6 +852,11 @@ identifier:
             }
 
             const auto& table_pid_type = regs.get_pid($1->str_value);
+            const auto& index_pid_type = regs.get_pid($3->str_value);
+
+            if (index_pid_type.size == 0) {
+                yyerror("Cannot use table as a table index!");
+            }
 
             //CASE: IT IS A TABLE
             if (table_pid_type.size != 0) {
@@ -769,7 +873,7 @@ identifier:
             $$->lineno = yylineno;
             free($3);
         }
-    | pidentifier '[' NUMBER ']' {
+    | pidentifier '[' signed_number ']' {
             $$ = $1;
             if (!regs.contains($1->str_value)) {
                 yyerror("undefined identifier", yylineno, $1->str_value);

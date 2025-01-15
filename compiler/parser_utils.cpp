@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <utility>
 #include <algorithm>
+#include <regex>
 
 const std::string math_module::multiplication_path = "../compiler/math_module/multiplication.mr";
 const std::string math_module::division_path = "../compiler/math_module/division.mr";
@@ -584,7 +585,7 @@ std::list<std::string> jump_to_mod_proc(const std::string& line, const long reg,
             "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
             "STORE " + std::to_string(reg + 2),
             "JUMP " + std::to_string(dest_line_no - line_no - 5),
-            "LOAD " + std::to_string(reg), // here is the remainder stored
+            "LOAD " + std::to_string(reg), // here is the remainder stored we need to get here after returning from proc
         };
     } else { // regular MOD
         translation = {
@@ -594,7 +595,7 @@ std::list<std::string> jump_to_mod_proc(const std::string& line, const long reg,
             "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
             "STORE " + std::to_string(reg + 2),
             "JUMP " + std::to_string(dest_line_no - line_no - 5),
-            "LOAD " + std::to_string(reg), // here is the remainder stored
+            "LOAD " + std::to_string(reg), // here is the remainder stored we need to get here after returning from proc
         };
     }
     return translation;
@@ -670,12 +671,129 @@ void parse_line(std::string& line, const long line_no, const long header_offset,
     }
 }
 
+// probably the dumbest thing I've had to resort to in order to avoid
+void amend_for_additional_lines(std::list<std::string>& proc_commands, const long num_of_additional_lines, const long line_no) {
+    // if the proc_commands end up bigger after parsing references
+    // this function makes up for the offset in each jump that was including the line
+    // std::list<std::pair<std::_List_iterator<std::string>, long>> jump_calls;
+    std::list<std::pair<std::list<std::string>::iterator, long>> jump_forward_calls;
+    auto line_count = 0;
 
-void parse_proc_line(std::string& line, const std::list<long>& arg_regs) {
+    // iterate to push forward jumps
+    for (auto it = proc_commands.begin(); it != proc_commands.end(); ++it, ++line_count) {
+        auto& line = *it;
+
+        if (line_count == line_no) {
+            for (auto call : jump_forward_calls) {
+                auto& call_str = *call.first;
+                const auto argument_pos = call_str.find(" ") + 1;
+                auto argument = std::stol(call_str.substr(argument_pos));
+                argument = argument + num_of_additional_lines;
+                call_str.replace(argument_pos, std::string::npos, std::to_string(argument));
+            }
+
+            break;
+        }
+
+        if (line.compare(0, 1, "J") == 0) {
+            const auto argument_pos = line.find(" ") + 1;
+
+            //if (line_count < line_no) {
+            if (auto argument = std::stol(line.substr(argument_pos)); argument > 0) {
+                auto jump_call = std::make_pair(it, argument);
+                jump_forward_calls.push_back(jump_call);
+            }
+            //}
+        }
+
+        auto jump_iterator = jump_forward_calls.begin();
+        while (jump_iterator != jump_forward_calls.end()) {
+            auto& jump = *jump_iterator;
+            auto& str = jump.first;
+            auto& length = jump.second;
+            length = length - 1;
+            length = length - std::ranges::count(line, '\n');
+            if (length <= 0) {
+                jump_iterator = jump_forward_calls.erase(jump_iterator);
+            } else {
+                ++jump_iterator;
+            }
+        }
+
+        line_count += std::ranges::count(line, '\n');;
+    }
+
+    // iterate backwards to push backward jumps
+    std::list<std::pair<std::list<std::string>::reverse_iterator, long>> jump_backward_calls;
+    line_count = proc_commands.size() - 1;
+    for (auto it = proc_commands.rbegin(); it != proc_commands.rend(); ++it, --line_count) {
+        auto& line = *it;
+
+        if (line_count == line_no) {
+            for (auto call : jump_backward_calls) {
+                auto& call_str = *call.first;
+                const auto argument_pos = call_str.find(" ") + 1;
+                auto argument = std::stol(call_str.substr(argument_pos));
+                argument = argument - num_of_additional_lines;
+                std::cout << "BEFORE JUMP: " << call_str << std::endl;
+                call_str.replace(argument_pos, std::string::npos, std::to_string(argument));
+                std::cout << "repaired JUMP: " << call_str << std::endl;
+            }
+
+            break;
+        }
+
+        if (line.compare(0, 1, "J") == 0) {
+            const auto argument_pos = line.find(" ") + 1;
+
+            //if (line_count < line_no) {
+            if (auto argument = std::stol(line.substr(argument_pos)); argument < 0) {
+                auto jump_call = std::make_pair(it, argument);
+                jump_backward_calls.push_back(jump_call);
+                std::cout << "FOUND JUMP: " << line << std::endl;
+            }
+            //}
+        }
+
+        auto jump_iterator = jump_backward_calls.begin();
+        while (jump_iterator != jump_backward_calls.end()) {
+            auto& jump = *jump_iterator;
+            auto& length = jump.second;
+            length = length + 1;
+            length = length + std::ranges::count(line, '\n');
+            if (length > 0) {
+                jump_iterator = jump_backward_calls.erase(jump_iterator);
+            } else {
+                ++jump_iterator;
+            }
+        }
+
+        line_count -= std::ranges::count(line, '\n');
+    }
+
+}
+
+void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, const std::list<long>& arg_regs, const long line_no) {
 
     for (const auto& reg : arg_regs) {
         const auto& reg_str = std::to_string(reg);
         if (const auto pos = line.find(reg_str); pos != std::string::npos) {
+            auto stripped_line = line.find("\t#") == std::string::npos ? line : line.substr(0, line.find("\t#")) ;
+            stripped_line = stripped_line.find(" #") == std::string::npos ? stripped_line : stripped_line.substr(0, stripped_line.find(" #")) ;
+            // std::cout << "line: \""<< line << '"' << std::endl;
+            // std::cout << "stripped line: \""<< stripped_line << '"' << std::endl;
+            if (stripped_line.find(reg_str) == std::string::npos) {
+                std::cout << "FALSE POSITIVE: "<< line << std::endl;
+                continue; // false positive
+            }
+            auto argument = stripped_line.substr(stripped_line.find(reg_str));
+            // std::cout << "argument: \""<< argument  << '"' << std::endl;
+            // std::cout << "real argument: \""<< reg_str << '"' << std::endl;
+            if (argument.compare(reg_str) != 0 && argument.compare(reg_str + "]") != 0) {
+                std::cout << "FALSE POSITIVE: "<< line << std::endl;
+                continue; // false positive
+            }
+
 
             if (line.compare(0, 4, "LOAD") == 0) {
                 if (line.find("# passing address") != std::string::npos) {
@@ -705,6 +823,8 @@ void parse_proc_line(std::string& line, const std::list<long>& arg_regs) {
 
             if (line.compare(0, 5, "LOADI") == 0) {
                 line = "LOADI " + reg_str + "\nLOADI 0";
+                amend_for_additional_lines(proc_commands, 1, line_no);
+                std::cout << " LINE : " << line << ", lineno: " << line_no << " needed to be repaired" << std::endl;
             } else if (line.compare(0, 5, "STORE") == 0) {
                 line = "STOREI " + reg_str;
             } else if (line.compare(0, 6, "STOREI") == 0) {
@@ -725,8 +845,12 @@ void parse_proc_line(std::string& line, const std::list<long>& arg_regs) {
                 line = "MODI " + reg_str;
             } else if (line.compare(0, 3, "GET") == 0) {
                 line = "GET 0\nSTOREI " + reg_str;
+                amend_for_additional_lines(proc_commands, 1, line_no);
+                std::cout << " LINE : " << line << ", lineno: " << line_no << " needed to be repaired" << std::endl;
             } else if (line.compare(0, 3, "PUT") == 0) {
                 line = "LOADI " + reg_str + "\nPUT 0";
+                amend_for_additional_lines(proc_commands, 1, line_no);
+                std::cout << " LINE : " << line << ", lineno: " << line_no << " needed to be repaired" << std::endl;
             }
         }
     }

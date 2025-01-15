@@ -13,7 +13,7 @@ extern register_table regs;
 
 %}
 
-number              -?[0-9]+
+number              [0-9]+
 pidentifier         [_a-z]+
 comment_line        (("\\"|"#")([^\n]*))$
 line_break          \\[ \t]*\n
