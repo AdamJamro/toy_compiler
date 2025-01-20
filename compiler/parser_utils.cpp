@@ -417,10 +417,11 @@ void postprocess(const std::string& filename, register_table& regs) {
         last_free_reg = last_free_reg + 8; // NUMBER OF REGISTERS USED BY DIV
     }
 
-    // calculate header offset and collect all cached constants
+    // calculate header offset
+    // collect all cached constants
     long header_size = 0;
     std::unordered_set<long> cached_constants = {};
-    for (const auto& translation_line : file_contents) {
+    for (auto& translation_line : file_contents) {
         check_for_caches(translation_line, cached_constants); // omits "this_line"'s
     }
     if (multiplication_flag) {
@@ -481,30 +482,64 @@ void postprocess(const std::string& filename, register_table& regs) {
         }
     }
 
-    auto line_count = header_size;
+    long line_count = header_size - 1;
+    for (auto& translation_line : file_contents) {
+        std::cout<<translation_line<<std::endl;
+        parse_proc_calls_jump(translation_line, line_count, header_size);
+        line_count++;
+    }
+
+    std::list<jump_line> jump_lines;
+    line_count = header_size - 1;
+    for (auto& translation_line : file_contents) {
+        check_for_jumps(translation_line, line_count, jump_lines);
+        line_count++;
+    }
+
+    line_count = header_size - 1;
     auto it = file_contents.begin();
     while (it != file_contents.end()) {
         auto& translation_line = *it;
         auto& current_pos = it;
-        ++it;
+        auto nextIt = std::next(it);
+
         if (translation_line.compare(0, 3, "MUL") == 0) {
             auto translation = jump_to_mul_proc(translation_line, mul_args, mul_proc_line_no, line_count);
+            update_jump_lines(jump_lines, translation.size() - 1, line_count);
             line_count += translation.size();
             file_contents.splice(current_pos, translation);
             translation_line = "#EMPTY";
         } else if (translation_line.find("DIV") != std::string::npos) {
             auto translation = jump_to_div_proc(translation_line, div_args, div_proc_line_no, line_count);
+            update_jump_lines(jump_lines, translation.size() - 1, line_count);
             line_count += translation.size();
             file_contents.splice(current_pos, translation);
             translation_line = "#EMPTY";
         } else if (translation_line.find("MOD") != std::string::npos) {
             auto translation = jump_to_mod_proc(translation_line, div_args, div_proc_line_no, line_count);
+            update_jump_lines(jump_lines, translation.size() - 1, line_count);
+            line_count += translation.size();
+            file_contents.splice(current_pos, translation);
+            translation_line = "#EMPTY";
+        } else if (translation_line.find("RSUB") != std::string::npos) {
+            // reverse subtraction
+            auto line_tail = translation_line.substr(5, translation_line.back());
+
+            auto translation = {
+                "STORE " + std::to_string(last_free_reg) + "\t# RSUB",
+                "LOAD " + line_tail,
+                "SUB " + std::to_string(last_free_reg)
+            };
+            last_free_reg++;
+            update_jump_lines(jump_lines, translation.size() - 1, line_count);
             line_count += translation.size();
             file_contents.splice(current_pos, translation);
             translation_line = "#EMPTY";
         } else {
             line_count++;
         }
+
+        it = nextIt;
     }
 
     line_count = header_size - 1; // for some reason file_contents contains JUMP to the main (procs skip)
@@ -512,7 +547,9 @@ void postprocess(const std::string& filename, register_table& regs) {
         if (translation_line.compare(0, 6, "#EMPTY") == 0) {
             continue;
         }
-        parse_line(translation_line, line_count, header_size, cache_regs);
+        //parse_line(translation_line, line_count, header_size, cache_regs);
+        parse_proc_calls_return(translation_line, line_count);
+        parse_line_cache(translation_line, cache_regs);
         output_file << translation_line << std::endl;
         line_count++;
     }
@@ -523,15 +560,29 @@ std::list<std::string> jump_to_mul_proc(const std::string& line, const long reg,
     if (const auto pos = line.find("MUL"); pos == std::string::npos) {
         throw std::invalid_argument("The line " + line + " is not a MUL instruction");
     }
+    std::list<std::string> translation;
 
-    std::list translation = {
-        "STORE " + std::to_string(reg),
-        "LOAD " + line.substr(4, line.back()),
-        "STORE " + std::to_string(reg + 1),
-        "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
-        "STORE " + std::to_string(reg + 2),
-        "JUMP " + std::to_string(dest_line_no - line_no - 5) // shift since we added 5 lines
-    };
+    if (const auto pos = line.find("MULI"); pos != std::string::npos) {
+        translation = {
+            "STORE " + std::to_string(reg),
+            "LOADI " + line.substr(5, line.back()),
+            "STORE " + std::to_string(reg + 1),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5) // shift since we added 5 lines
+        };
+    } else {
+        translation = {
+            "STORE " + std::to_string(reg),
+            "LOAD " + line.substr(4, line.back()),
+            "STORE " + std::to_string(reg + 1),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5) // shift since we added 5 lines
+        };
+    }
+
+
     return translation;
 }
 
@@ -541,11 +592,29 @@ std::list<std::string> jump_to_div_proc(const std::string& line, const long reg,
     }
     std::list<std::string> translation;
 
-    if (line.find("RDIV") != std::string::npos) {
+    if (line.find("RDIVI") != std::string::npos) {
+        translation = {
+            "STORE " + std::to_string(reg + 1),
+            "LOADI " + line.substr(6, line.back()),
+            "STORE " + std::to_string(reg),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5)
+        };
+    } else if (line.find("RDIV") != std::string::npos) {
         translation = {
             "STORE " + std::to_string(reg + 1),
             "LOAD " + line.substr(5, line.back()),
             "STORE " + std::to_string(reg),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5)
+        };
+    } else if (line.find("DIVI") != std::string::npos) {
+        translation = {
+            "STORE " + std::to_string(reg),
+            "LOADI " + line.substr(5, line.back()),
+            "STORE " + std::to_string(reg + 1),
             "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
             "STORE " + std::to_string(reg + 2),
             "JUMP " + std::to_string(dest_line_no - line_no - 5)
@@ -577,11 +646,31 @@ std::list<std::string> jump_to_mod_proc(const std::string& line, const long reg,
     }
     std::list<std::string> translation;
 
-    if (line.find("RMOD") != std::string::npos) {
+    if (line.find("RMODI") != std::string::npos) {
+        translation = {
+            "STORE " + std::to_string(reg + 1),
+            "LOADI " + line.substr(6, line.back()),
+            "STORE " + std::to_string(reg),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5),
+            "LOAD " + std::to_string(reg), // here is the remainder stored we need to get here after returning from proc
+        };
+    } else if (line.find("RMOD") != std::string::npos) {
         translation = {
             "STORE " + std::to_string(reg + 1),
             "LOAD " + line.substr(5, line.back()),
             "STORE " + std::to_string(reg),
+            "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
+            "STORE " + std::to_string(reg + 2),
+            "JUMP " + std::to_string(dest_line_no - line_no - 5),
+            "LOAD " + std::to_string(reg), // here is the remainder stored we need to get here after returning from proc
+        };
+    } else if (line.find("MODI") != std::string::npos) {
+        translation = {
+            "STORE " + std::to_string(reg),
+            "LOADI " + line.substr(5, line.back()),
+            "STORE " + std::to_string(reg + 1),
             "SET " + std::to_string(line_no + 6), // bigger shift since line_no points to the translation.front()
             "STORE " + std::to_string(reg + 2),
             "JUMP " + std::to_string(dest_line_no - line_no - 5),
@@ -599,6 +688,12 @@ std::list<std::string> jump_to_mod_proc(const std::string& line, const long reg,
         };
     }
     return translation;
+}
+
+void check_for_jumps(std::string& line, const long line_no, std::list<jump_line>& jump_lines) {
+    if (line.compare(0, 1, "J") == 0) {
+        jump_lines.emplace_back(line, line_no);
+    }
 }
 
 void check_for_caches(const std::string& line, std::unordered_set<long>& cached_constants) {
@@ -637,23 +732,8 @@ void parse_math_module_line(std::string& line, const long arg_reg, const std::un
 
 }
 
-void parse_line(std::string& line, const long line_no, const long header_offset, std::unordered_map<std::string, long>& cache_regs) {
+void parse_line_cache(std::string& line, const std::unordered_map<std::string, long>& cache_regs) {
     // this function assumes that all cached constants are already cached
-
-    //replace this_line with actual line_no
-    if (const auto pos = line.find("this_line"); pos != std::string::npos) {
-        if (const auto pos_proc_call_load_line = line.find("[this_line + 3]"); pos_proc_call_load_line != std::string::npos) {
-            line.replace(pos_proc_call_load_line, 15, std::to_string(line_no + 3));
-        }
-        if (const auto pos_proc_call_jump_to_proc = line.find("JUMP "); pos_proc_call_jump_to_proc != std::string::npos) {
-            const int value_length = line.find(" -") - line.front();
-            const auto value = std::stoi(line.substr(pos_proc_call_jump_to_proc + 4, value_length));
-            line = "JUMP " + std::to_string(value - line_no + header_offset)
-            + "\t# offset: +" + std::to_string(header_offset)
-            + "\toriginal: " + std::to_string(value) + " - " + std::to_string(line_no);
-        }
-        return;
-    }
 
     //replace [cached] value with its reg
     if (const auto pos = line.find("["); pos != std::string::npos) {
@@ -671,7 +751,31 @@ void parse_line(std::string& line, const long line_no, const long header_offset,
     }
 }
 
-// probably the dumbest thing I've had to resort to in order to avoid
+void parse_proc_calls_return(std::string& line, const long line_no) {
+
+    //replace this_line with actual line_no
+    if (const auto pos = line.find("this_line"); pos != std::string::npos) {
+        if (const auto pos_proc_call_load_line = line.find("[this_line + 3]"); pos_proc_call_load_line != std::string::npos) {
+            line.replace(pos_proc_call_load_line, 15, std::to_string(line_no + 3));
+        }
+    }
+}
+
+void parse_proc_calls_jump(std::string& line, const long line_no, const long header_offset) {
+    //replace this_line with actual line_no
+    if (const auto pos = line.find("this_line"); pos != std::string::npos) {
+        if (const auto pos_proc_call_jump_to_proc = line.find("JUMP "); pos_proc_call_jump_to_proc != std::string::npos) {
+            const int value_length = line.find(" -") - line.front();
+            const auto value = std::stoi(line.substr(pos_proc_call_jump_to_proc + 4, value_length));
+            line = "JUMP " + std::to_string(value - line_no + header_offset)
+            + "\t# offset: +" + std::to_string(header_offset)
+            + "\t# original: " + std::to_string(value) + " - " + std::to_string(line_no);
+        }
+    }
+}
+
+// probably the dumbest thing I've had to resort to in order to avoid jump operations breaking
+// this function is ment to be invoked in parsing proc_call's lines
 void amend_for_additional_lines(std::list<std::string>& proc_commands, const long num_of_additional_lines, const long line_no) {
     // if the proc_commands end up bigger after parsing references
     // this function makes up for the offset in each jump that was including the line
@@ -739,7 +843,6 @@ void amend_for_additional_lines(std::list<std::string>& proc_commands, const lon
                 call_str.replace(argument_pos, std::string::npos, std::to_string(argument));
                 std::cout << "repaired JUMP: " << call_str << std::endl;
             }
-
             break;
         }
 
@@ -774,7 +877,6 @@ void amend_for_additional_lines(std::list<std::string>& proc_commands, const lon
 }
 
 void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, const std::list<long>& arg_regs, const long line_no) {
-
     for (const auto& reg : arg_regs) {
         const auto& reg_str = std::to_string(reg);
         if (const auto pos = line.find(reg_str); pos != std::string::npos) {
@@ -786,7 +888,13 @@ void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, c
                 std::cout << "FALSE POSITIVE: "<< line << std::endl;
                 continue; // false positive
             }
-            auto argument = stripped_line.substr(stripped_line.find(reg_str));
+
+            std::string argument;
+            if (stripped_line.find("[") != std::string::npos) {
+                argument = stripped_line.substr(stripped_line.find(" ") + 2);
+            } else {
+                argument = stripped_line.substr(stripped_line.find(" ") + 1);
+            }
             // std::cout << "argument: \""<< argument  << '"' << std::endl;
             // std::cout << "real argument: \""<< reg_str << '"' << std::endl;
             if (argument.compare(reg_str) != 0 && argument.compare(reg_str + "]") != 0) {
@@ -820,7 +928,7 @@ void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, c
             if (line.find("[") != std::string::npos) {
                 return; // the arg was used as a constant
             }
-
+            // TODO replace OP by OPI with find() to leave optional ROP intact
             if (line.compare(0, 5, "LOADI") == 0) {
                 line = "LOADI " + reg_str + "\nLOADI 0";
                 amend_for_additional_lines(proc_commands, 1, line_no);
@@ -831,16 +939,22 @@ void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, c
                 line = "STOREII " + reg_str;
             } else if (line.compare(0, 3, "ADD") == 0) {
                 line = "ADDI " + reg_str;
+            } else if (line.compare(0, 4, "RADD") == 0) {
+                line = "RADDI " + reg_str;
             } else if (line.compare(0, 4, "ADDI") == 0) {
-                line = "ADDII " + reg_str;
+                //line = "ADDII " + reg_str;
             } else if (line.compare(0, 3, "SUB") == 0) {
                 line = "SUBI " + reg_str;
             } else if (line.compare(0, 4, "SUBI") == 0) {
-                line = "SUBII " + reg_str;
+                //line = "SUBII " + reg_str;
+            } else if (line.compare(0, 4, "RSUB") == 0) {
+                line = "RSUBI " + reg_str;
             } else if (line.compare(0, 3, "MUL") == 0) {
                 line = "MULI " + reg_str;
             } else if (line.compare(0, 3, "DIV") == 0) {
                 line = "DIVI " + reg_str;
+            } else if (line.compare(0, 4, "RDIV") == 0) {
+                line = "RDIVI " + reg_str;
             } else if (line.compare(0, 3, "MOD") == 0) {
                 line = "MODI " + reg_str;
             } else if (line.compare(0, 3, "GET") == 0) {
@@ -931,11 +1045,11 @@ int register_table::assign_registers(const int size) {
     first_untouched_register = std::max(first_untouched_register, static_cast<long>(reg + size));
 
 
-    std::cout << "free regs after oparation:" << std::endl;
-    for (const auto& [first, last] : free_registers) {
-        printf("from %lld to %lld\n", first, last);
-    }
-    std::cout << "first_untouched_reg" << first_untouched_register << std::endl;
+    // std::cout << "free regs after oparation:" << std::endl;
+    // for (const auto& [first, last] : free_registers) {
+        // printf("from %lld to %lld\n", first, last);
+    // }
+    // std::cout << "first_untouched_reg" << first_untouched_register << std::endl;
     return reg;
 }
 
@@ -1087,9 +1201,9 @@ void register_table::add_cache_reg(const std::string &pid, const long long reg) 
 
 int register_table::add_table(const std::string &pid, const int from, const int to) {
     if (table.contains(pid)){
-        // throw std::runtime_error("Syntax Error: Redeclaration of variable");
+        // throw std::runtime_error("Error: Redeclaration of variable");
         return table[pid].register_no;
-    } //TODO it was simply commented out you need to handle it in the parser tho
+    } //TODO it was simply commented out you need to handle it in the parser
 
     pid_type new_pid;
     new_pid.size = to - from + 1;
@@ -1124,6 +1238,62 @@ long register_table::unused_register() const {
 }
 
 
+// jump_lines
+jump_line::jump_line(std::string& line_reference, const long line_number): line_no(line_number), command_line(line_reference) {
+
+    // get the comment
+    const auto comment_pos = line_reference.find("\t#");
+    if (comment_pos != std::string::npos) {
+        comment = line_reference.substr(comment_pos);
+    } else {
+        comment = "";
+    }
+
+    // get the opcode
+    opcode = line_reference.substr(0 , line_reference.find(" "));
+
+    // get the argument
+    const auto stripped_line = comment.empty() ? line_reference : line_reference.substr(0, line_reference.find("\t#"));
+    if (opcode.compare(0, 1, "J") == 0) {
+        const auto argument_pos = line_reference.find(" ") + 1;
+        argument = std::stol(stripped_line.substr(argument_pos));
+    } else {
+        throw std::invalid_argument("the line" + line_reference + " seems not to be a jump call");
+    }
+}
+void jump_line::update_line_no(const long new_line_no) {
+    line_no = new_line_no;
+}
+
+// assuming position of the additional lines, updates the jump so the jump remains consistent with usual program flow
+void jump_line::update_argument(const long additional_lines_no, const long position) {
+    const auto dest_line_no = argument + line_no;
+    if (argument > 0) { // forward jump
+        if (line_no < position && position < dest_line_no) {
+            // update argument
+            argument += additional_lines_no;
+            command_line = opcode + " " + std::to_string(argument) + comment;
+        }
+    } else { // backward jump
+        if (dest_line_no <= position && position < line_no) {
+            // update argument
+            argument -= additional_lines_no;
+            command_line = opcode + " " + std::to_string(argument) + comment;
+        }
+    }
+
+    if (position < line_no) {
+        line_no += additional_lines_no;
+    }
+}
+
+
+void update_jump_lines(std::list<jump_line>& jump_lines, const long additional_lines_no, const long position) {
+    for (auto& jump : jump_lines) {
+        jump.update_argument(additional_lines_no, position);
+    }
+}
+
 //MISCELLANEOUS
 std::string extract_function_name(const std::string& fun_call) {
     const size_t pos = fun_call.find('(');
@@ -1132,3 +1302,5 @@ std::string extract_function_name(const std::string& fun_call) {
     }
     return fun_call.substr(0, pos);
 }
+
+

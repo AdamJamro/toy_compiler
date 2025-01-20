@@ -30,12 +30,17 @@ public:
 
 struct pid_type;
 class register_table;
+class jump_line;
+void update_jump_lines(std::list<jump_line>&, long, long);
 TokenAttribute* parse_expression(TokenAttribute*, TokenAttribute*, const std::string&, const std::string&, long, long);
 TokenAttribute* parse_condition(TokenAttribute*, TokenAttribute*, std::list<std::string>, const std::list<std::string>&, bool, int, int, std::unordered_set<long>&);
 std::pair<std::list<std::string>, std::list<std::string>> parse_for_loop(const TokenAttribute*, const TokenAttribute*, long, long, std::unordered_set<long>&, register_table&, const bool);
 void check_for_caches(const std::string&, std::unordered_set<long>&);
-void parse_line(std::string&, long, long, std::unordered_map<std::string, long>&);
+void check_for_jumps(std::string&, long, std::list<jump_line>&);
+void parse_line_cache(std::string&, const std::unordered_map<std::string, long>&);
 void parse_proc_line(std::string&, std::list<std::string>&, const std::list<long>&, long);
+void parse_proc_calls_return(std::string&, long);
+void parse_proc_calls_jump(std::string&, long, long);
 void parse_math_module_line(std::string&, long, const std::unordered_map<std::string, long> &);
 void postprocess(const std::string&, register_table&);
 std::list<std::string> jump_to_mul_proc(const std::string&, long, long, long);
@@ -47,6 +52,20 @@ struct CompareFirstPairEntry {
     bool operator()(const std::pair<long long, long long>& a, const std::pair<long long, long long>& b) const {
         return a.first == b.first? a.second < b.second : a.first < b.first;
     }
+};
+
+class jump_line {
+private:
+    long line_no;
+    long argument;
+    long dest_line_no() const { return line_no + argument; }
+    std::string& command_line;
+    std::string comment;
+    std::string opcode;
+public:
+    jump_line(std::string &line_reference, long line_number);
+    void update_line_no(long new_line_no);
+    void update_argument(long additional_lines_no, long position);
 };
 
 class funs_table {

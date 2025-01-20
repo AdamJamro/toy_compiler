@@ -582,12 +582,12 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,    77,    77,   127,   172,   211,   218,   222,   228,   234,
-     240,   267,   289,   305,   325,   355,   405,   475,   478,   497,
-     517,   525,   572,   582,   598,   607,   624,   634,   644,   653,
-     665,   670,   677,   692,   709,   713,   717,   721,   728,   740,
-     751,   762,   773,   784,   798,   802,   810,   815,   823,   836,
-     848,   876
+       0,    77,    77,   127,   176,   219,   227,   231,   237,   243,
+     249,   276,   298,   314,   334,   364,   414,   489,   492,   511,
+     531,   539,   586,   596,   612,   621,   639,   649,   659,   668,
+     680,   685,   692,   707,   724,   728,   732,   736,   743,   755,
+     766,   777,   788,   799,   813,   817,   825,   830,   838,   851,
+     867,   898
 };
 #endif
 
@@ -1317,6 +1317,7 @@ yyreduce:
         const auto& fun_name = (yyvsp[-5].attr)->str_value;
         const auto& arguments = (yyvsp[-5].attr)->translation;
         const auto& declarations = (yyvsp[-3].attr)->translation;
+        const auto proc_block_size = (yyvsp[-7].attr)->long_value; // we store there the size
         auto& proc_commands = (yyvsp[-1].attr)->translation;
 
         if (regs.contains(fun_name)){
@@ -1325,7 +1326,7 @@ yyreduce:
         const auto return_reg = regs.add(fun_name);
 
         // store procedure's data
-        const auto fun_line_no = (yyvsp[-7].attr)->translation.size(); // line indexes are shifted down by one
+        const auto fun_line_no = proc_block_size; // don't add one since we index starting at 0
         const auto first_arg = regs.at(arguments.front());
         funs.add(fun_name, fun_line_no, arguments.size(), first_arg);
 
@@ -1345,28 +1346,32 @@ yyreduce:
         (yyval.attr) = (yyvsp[-7].attr);
         (yyvsp[-7].attr)->translation.splice((yyvsp[-7].attr)->translation.end(), proc_commands);
         (yyval.attr)->translation.emplace_back("RTRN " + to_string(return_reg));
+        proc_line_count += 1; // add one for the return statement
+        (yyval.attr)->long_value = proc_block_size + proc_line_count; // update the size; it's not equal to the $$->translation size!!!
 
         // forget this context after moving to the next procedure
         for (const auto& pid : arguments) {
             regs.forget_pid(pid);
         }
-        // TODO forget regular declarations
+        // forget regular declarations
         for (const auto& pid : declarations) {
             regs.forget_pid(pid);
+            cout << pid << " has been forgotten" << endl;
         }
         free((yyvsp[-5].attr));
         free((yyvsp[-3].attr));
         free((yyvsp[-1].attr));
     }
-#line 1362 "../compiler/parser.cpp"
+#line 1366 "../compiler/parser.cpp"
     break;
 
   case 4: /* procedures: procedures PROCEDURE proc_head IS BEGIN_KW commands END  */
-#line 172 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 176 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                               {
         const auto& fun_name = (yyvsp[-4].attr)->str_value;
         const auto& arguments = (yyvsp[-4].attr)->translation;
         auto& proc_commands = (yyvsp[-1].attr)->translation;
+        auto proc_block_size = (yyvsp[-6].attr)->long_value; // we store there the size
 
         if (regs.contains(fun_name)){
             yyerror("procedure's name is ambiguous", yylineno, fun_name);
@@ -1374,7 +1379,7 @@ yyreduce:
         const auto return_reg = regs.add(fun_name);
 
         // store procedure's data
-        const auto fun_line_no = (yyvsp[-6].attr)->translation.size();
+        const auto fun_line_no = proc_block_size; // don't add one since we index starting at 0
         const auto first_arg = regs.at(arguments.front());
         funs.add(fun_name, fun_line_no, arguments.size(), first_arg);
 
@@ -1394,64 +1399,68 @@ yyreduce:
         (yyval.attr) = (yyvsp[-6].attr);
         (yyvsp[-6].attr)->translation.splice((yyvsp[-6].attr)->translation.end(), (yyvsp[-1].attr)->translation);
         (yyval.attr)->translation.emplace_back("RTRN " + to_string(return_reg));
+        proc_line_count += 1; // add one for the return statement
+        (yyval.attr)->long_value = proc_block_size + proc_line_count; // update the size; it's not equal to the $$->translation size!!!
 
         // forget this context after moving to the next procedure
         for (const auto& pid : arguments) {
             regs.forget_pid(pid);
         }
+
         free((yyvsp[-4].attr));
         free((yyvsp[-1].attr));
     }
-#line 1406 "../compiler/parser.cpp"
+#line 1414 "../compiler/parser.cpp"
     break;
 
   case 5: /* procedures: %empty  */
-#line 211 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 219 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
              {
         (yyval.attr) = new TokenAttribute();
+        (yyval.attr)->long_value = 0;
         (yyval.attr)->translation = {};
     }
-#line 1415 "../compiler/parser.cpp"
+#line 1424 "../compiler/parser.cpp"
     break;
 
   case 6: /* main: PROGRAM IS declarations BEGIN_KW commands END  */
-#line 218 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 227 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                   {
             (yyval.attr) = (yyvsp[-1].attr);
             free((yyvsp[-3].attr));
         }
-#line 1424 "../compiler/parser.cpp"
+#line 1433 "../compiler/parser.cpp"
     break;
 
   case 7: /* main: PROGRAM IS BEGIN_KW commands END  */
-#line 222 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 231 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                        {
             (yyval.attr) = (yyvsp[-1].attr);
         }
-#line 1432 "../compiler/parser.cpp"
+#line 1441 "../compiler/parser.cpp"
     break;
 
   case 8: /* commands: commands command  */
-#line 228 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 237 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                      {
             //($1->translation).splice($1->translation.end(), $2->translation) // TODO why does it crash?
             (yyvsp[-1].attr)->translation.splice((yyvsp[-1].attr)->translation.end(), (yyvsp[0].attr)->translation);
             (yyval.attr) = (yyvsp[-1].attr);
             free((yyvsp[0].attr));
         }
-#line 1443 "../compiler/parser.cpp"
+#line 1452 "../compiler/parser.cpp"
     break;
 
   case 9: /* commands: command  */
-#line 234 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 243 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
               {
             (yyval.attr) = (yyvsp[0].attr);
         }
-#line 1451 "../compiler/parser.cpp"
+#line 1460 "../compiler/parser.cpp"
     break;
 
   case 10: /* command: identifier ASSIGNMENT expression ';'  */
-#line 240 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 249 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                          {
             /*if ($3->type == STRING) {
                 output_file << "LOAD "<< $3->register_no << "\t#" << $3->str_value << endl;
@@ -1479,11 +1488,11 @@ yyreduce:
             }
             free((yyvsp[-3].attr));
         }
-#line 1483 "../compiler/parser.cpp"
+#line 1492 "../compiler/parser.cpp"
     break;
 
   case 11: /* command: IF condition THEN commands ELSE commands ENDIF  */
-#line 267 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 276 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                      {
             (yyval.attr) = (yyvsp[-5].attr);
             if ((yyvsp[-5].attr)->type != LONG) { // condition is an lval
@@ -1506,11 +1515,11 @@ yyreduce:
             free((yyvsp[-3].attr));
             free((yyvsp[-1].attr));
         }
-#line 1510 "../compiler/parser.cpp"
+#line 1519 "../compiler/parser.cpp"
     break;
 
   case 12: /* command: IF condition THEN commands ENDIF  */
-#line 289 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 298 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                        {
             (yyval.attr) = (yyvsp[-3].attr);
             if ((yyvsp[-3].attr)->type != LONG) { // it's an lval
@@ -1527,11 +1536,11 @@ yyreduce:
             }
             free((yyvsp[-1].attr));
         }
-#line 1531 "../compiler/parser.cpp"
+#line 1540 "../compiler/parser.cpp"
     break;
 
   case 13: /* command: WHILE condition DO commands ENDWHILE  */
-#line 305 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 314 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                            {
             (yyval.attr) = (yyvsp[-3].attr);
             if ((yyvsp[-3].attr)->type == STRING) { //it's lval
@@ -1552,11 +1561,11 @@ yyreduce:
             }
             free((yyvsp[-1].attr));
     }
-#line 1556 "../compiler/parser.cpp"
+#line 1565 "../compiler/parser.cpp"
     break;
 
   case 14: /* command: REPEAT commands UNTIL condition ';'  */
-#line 325 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 334 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                           {
             (yyval.attr) = (yyvsp[-3].attr);
             if ((yyvsp[-1].attr)->type == STRING) { //lval
@@ -1587,11 +1596,11 @@ yyreduce:
             }
             free((yyvsp[-1].attr));
         }
-#line 1591 "../compiler/parser.cpp"
+#line 1600 "../compiler/parser.cpp"
     break;
 
   case 15: /* command: FOR tidentifier FROM value TO value DO commands ENDFOR  */
-#line 355 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 364 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                              {
             (yyval.attr) = (yyvsp[-7].attr);
 
@@ -1642,11 +1651,11 @@ yyreduce:
             free((yyvsp[-3].attr));
             free((yyvsp[-1].attr));
         }
-#line 1646 "../compiler/parser.cpp"
+#line 1655 "../compiler/parser.cpp"
     break;
 
   case 16: /* command: FOR tidentifier FROM value DOWNTO value DO commands ENDFOR  */
-#line 405 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 414 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                                  {
              (yyval.attr) = (yyvsp[-7].attr);
 
@@ -1682,13 +1691,16 @@ yyreduce:
 
              auto loop_body_size = (yyvsp[-1].attr)->translation.size();
              auto [for_head, for_footer] = parse_for_loop((yyvsp[-5].attr), (yyvsp[-3].attr), tid_register, loop_body_size, cached_constants, regs, fast_loop);
-             // WE NEED TO REVERSE THE LOOP
+
+             // REVERSE THE LOOP
              for (auto& header_line : for_head) {
-                 if (header_line.find("JPOS" ) != string::npos) {
+                 if (header_line.find("JPOS") != string::npos) {
                      header_line.replace(0, 4, "JNEG");
                  } else if (header_line.find("JNEG") != string::npos) {
                      header_line.replace(0, 4, "JPOS");
                  }
+                 // each logic condition of type a < b or a <= b
+                 // gets translated into b < a or b <= a respectively
               }
              for (auto& footer_line : for_footer) {
                 if (footer_line.find("ADD [1]") != string::npos) {
@@ -1698,6 +1710,8 @@ yyreduce:
                 } else if (footer_line.find("JNEG") != string::npos) {
                     footer_line.replace(0, 4, "JPOS");
                 }
+                // we need to do the same here but with addition
+                // we make sure each iteration decrements the iterator
              }
 
 
@@ -1717,19 +1731,19 @@ yyreduce:
              free((yyvsp[-3].attr));
              free((yyvsp[-1].attr));
          }
-#line 1721 "../compiler/parser.cpp"
+#line 1735 "../compiler/parser.cpp"
     break;
 
   case 17: /* command: proc_call ';'  */
-#line 475 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 489 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                     {
             (yyval.attr) = (yyvsp[-1].attr);
     }
-#line 1729 "../compiler/parser.cpp"
+#line 1743 "../compiler/parser.cpp"
     break;
 
   case 18: /* command: READ identifier ';'  */
-#line 478 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 492 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                           {
             (yyval.attr) = (yyvsp[-1].attr);
             if ((yyvsp[-1].attr)->type == ADDRESS) {
@@ -1749,11 +1763,11 @@ yyreduce:
             //$$ = $2;
             //$$->translation.emplace_back("GET " + to_string($2->register_no));
         }
-#line 1753 "../compiler/parser.cpp"
+#line 1767 "../compiler/parser.cpp"
     break;
 
   case 19: /* command: WRITE value ';'  */
-#line 497 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 511 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                       {
             (yyval.attr) = (yyvsp[-1].attr);
             if ((yyvsp[-1].attr)->type == LONG) {
@@ -1771,21 +1785,21 @@ yyreduce:
 
             (yyval.attr)->translation.emplace_back("PUT " + to_string((yyvsp[-1].attr)->register_no));
         }
-#line 1775 "../compiler/parser.cpp"
+#line 1789 "../compiler/parser.cpp"
     break;
 
   case 20: /* proc_head: pidentifier '(' args_decl ')'  */
-#line 517 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 531 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                   {
         (yyval.attr) = (yyvsp[-1].attr); // get translation from args_decl
         (yyval.attr)->str_value = (yyvsp[-3].attr)->str_value;
         free((yyvsp[-3].attr));
     }
-#line 1785 "../compiler/parser.cpp"
+#line 1799 "../compiler/parser.cpp"
     break;
 
   case 21: /* proc_call: pidentifier '(' args ')'  */
-#line 525 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 539 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                              {
         const auto& fun_name = (yyvsp[-3].attr)->str_value;
         if (!regs.contains(fun_name)) {
@@ -1830,11 +1844,11 @@ yyreduce:
         (yyval.attr)->translation.emplace_back("JUMP " + to_string(funs.get_line_no(fun_name)) + " - this_line");
         free((yyvsp[-1].attr));
     }
-#line 1834 "../compiler/parser.cpp"
+#line 1848 "../compiler/parser.cpp"
     break;
 
   case 22: /* declarations: declarations ',' pidentifier  */
-#line 572 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 586 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                  {
             const auto& pid = (yyvsp[0].attr)->str_value;
             if (regs.contains(pid)) {
@@ -1845,11 +1859,11 @@ yyreduce:
             (yyval.attr)->translation.emplace_back(pid);
             free((yyvsp[0].attr));
         }
-#line 1849 "../compiler/parser.cpp"
+#line 1863 "../compiler/parser.cpp"
     break;
 
   case 23: /* declarations: declarations ',' pidentifier '[' signed_number ':' signed_number ']'  */
-#line 582 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 596 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                                            {
             const auto& pid = (yyvsp[-5].attr)->str_value;
             if (regs.contains(pid)) {
@@ -1866,11 +1880,11 @@ yyreduce:
             free((yyvsp[-3].attr));
             free((yyvsp[-1].attr));
         }
-#line 1870 "../compiler/parser.cpp"
+#line 1884 "../compiler/parser.cpp"
     break;
 
   case 24: /* declarations: pidentifier  */
-#line 598 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 612 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                   {
             const auto& pid = (yyvsp[0].attr)->str_value;
             if (regs.contains(pid)) {
@@ -1880,13 +1894,13 @@ yyreduce:
             (yyval.attr) = (yyvsp[0].attr);
             (yyval.attr)->translation = {pid};
         }
-#line 1884 "../compiler/parser.cpp"
+#line 1898 "../compiler/parser.cpp"
     break;
 
   case 25: /* declarations: pidentifier '[' signed_number ':' signed_number ']'  */
-#line 607 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 621 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                                           {
-            const auto& pid = (yyvsp[-3].attr)->str_value;
+            const auto& pid = (yyvsp[-5].attr)->str_value;
             if (regs.contains(pid)) {
                 yyerror("identifier redeclaration", yylineno, pid);
             }
@@ -1897,14 +1911,15 @@ yyreduce:
             }
             (yyval.attr) = (yyvsp[-5].attr);
             (yyval.attr)->translation = {pid};
+
             free((yyvsp[-3].attr));
             free((yyvsp[-1].attr));
         }
-#line 1904 "../compiler/parser.cpp"
+#line 1919 "../compiler/parser.cpp"
     break;
 
   case 26: /* args_decl: args_decl ',' pidentifier  */
-#line 624 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 639 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                               {
         const auto& pid = (yyvsp[0].attr)->str_value;
         if (regs.contains(pid)) {
@@ -1915,11 +1930,11 @@ yyreduce:
         (yyval.attr)->translation.emplace_back(pid);
         free((yyvsp[0].attr));
     }
-#line 1919 "../compiler/parser.cpp"
+#line 1934 "../compiler/parser.cpp"
     break;
 
   case 27: /* args_decl: args_decl ',' T pidentifier  */
-#line 634 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 649 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                   {
         const auto& pid = (yyvsp[0].attr)->str_value;
         if (regs.contains(pid)) {
@@ -1930,11 +1945,11 @@ yyreduce:
         (yyval.attr)->translation.emplace_back(pid);
         free((yyvsp[0].attr));
     }
-#line 1934 "../compiler/parser.cpp"
+#line 1949 "../compiler/parser.cpp"
     break;
 
   case 28: /* args_decl: pidentifier  */
-#line 644 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 659 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                   {
         const auto& pid = (yyvsp[0].attr)->str_value;
         if (regs.contains(pid)) {
@@ -1944,11 +1959,11 @@ yyreduce:
         (yyval.attr) = (yyvsp[0].attr);
         (yyval.attr)->translation = {pid};
     }
-#line 1948 "../compiler/parser.cpp"
+#line 1963 "../compiler/parser.cpp"
     break;
 
   case 29: /* args_decl: T pidentifier  */
-#line 653 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 668 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                     {
         const auto& pid = (yyvsp[0].attr)->str_value;
         if (regs.contains(pid)) {
@@ -1958,30 +1973,30 @@ yyreduce:
         (yyval.attr) = (yyvsp[0].attr);
         (yyval.attr)->translation = {pid};
     }
-#line 1962 "../compiler/parser.cpp"
+#line 1977 "../compiler/parser.cpp"
     break;
 
   case 30: /* args: args ',' pidentifier  */
-#line 665 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 680 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                          {
         (yyval.attr) = (yyvsp[-2].attr);
         (yyval.attr)->translation.emplace_back((yyvsp[0].attr)->str_value);
         free((yyvsp[0].attr));
     }
-#line 1972 "../compiler/parser.cpp"
+#line 1987 "../compiler/parser.cpp"
     break;
 
   case 31: /* args: pidentifier  */
-#line 670 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 685 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                   {
         (yyval.attr) = (yyvsp[0].attr);
         (yyval.attr)->translation = {(yyvsp[0].attr)->str_value};
     }
-#line 1981 "../compiler/parser.cpp"
+#line 1996 "../compiler/parser.cpp"
     break;
 
   case 32: /* expression: value  */
-#line 677 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 692 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
           {
             (yyval.attr) = (yyvsp[0].attr);
             if ((yyvsp[0].attr)->type == STRING) {
@@ -1997,11 +2012,11 @@ yyreduce:
                 yyerror("value has invalid type");
             }
         }
-#line 2001 "../compiler/parser.cpp"
+#line 2016 "../compiler/parser.cpp"
     break;
 
   case 33: /* expression: value '+' value  */
-#line 692 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 707 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                       {
         const auto val = (yyvsp[-2].attr)->long_value + (yyvsp[0].attr)->long_value;
 
@@ -2019,47 +2034,47 @@ yyreduce:
 
         (yyval.attr) = parse_expression((yyvsp[-2].attr), (yyvsp[0].attr), "ADD", "ADD", val, regs.add_rval());
     }
-#line 2023 "../compiler/parser.cpp"
+#line 2038 "../compiler/parser.cpp"
     break;
 
   case 34: /* expression: value '-' value  */
-#line 709 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 724 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                       {
         const auto val = (yyvsp[-2].attr)->long_value - (yyvsp[0].attr)->long_value;
         (yyval.attr) = parse_expression((yyvsp[-2].attr), (yyvsp[0].attr), "SUB", "RSUB", val, regs.add_rval());
     }
-#line 2032 "../compiler/parser.cpp"
+#line 2047 "../compiler/parser.cpp"
     break;
 
   case 35: /* expression: value '*' value  */
-#line 713 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 728 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
         const auto val = (yyvsp[-2].attr)->long_value * (yyvsp[0].attr)->long_value;
         (yyval.attr) = parse_expression((yyvsp[-2].attr), (yyvsp[0].attr), "MUL", "MUL", val, regs.add_rval());
     }
-#line 2041 "../compiler/parser.cpp"
+#line 2056 "../compiler/parser.cpp"
     break;
 
   case 36: /* expression: value '/' value  */
-#line 717 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 732 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
         const auto val = (yyvsp[0].attr)->long_value == 0 ? 0 : (yyvsp[-2].attr)->long_value / (yyvsp[0].attr)->long_value;
         (yyval.attr) = parse_expression((yyvsp[-2].attr), (yyvsp[0].attr), "DIV", "RDIV", val, regs.add_rval());
     }
-#line 2050 "../compiler/parser.cpp"
+#line 2065 "../compiler/parser.cpp"
     break;
 
   case 37: /* expression: value '%' value  */
-#line 721 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 736 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
         const auto val = (yyvsp[0].attr)->long_value == 0 ? 0 : (yyvsp[-2].attr)->long_value % (yyvsp[0].attr)->long_value;
         (yyval.attr) = parse_expression((yyvsp[-2].attr), (yyvsp[0].attr), "MOD", "RMOD", val, regs.add_rval());
     }
-#line 2059 "../compiler/parser.cpp"
+#line 2074 "../compiler/parser.cpp"
     break;
 
   case 38: /* condition: value '=' value  */
-#line 728 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 743 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                     { //EXCESS TOKEN ALREADY CLEANED UP BY PARSE FUNCTION!
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -2072,11 +2087,11 @@ yyreduce:
             // store an inverse jump (a weird somersault for smaller repeat-until loops)
             (yyval.attr)->str_value = "JZERO";
         }
-#line 2076 "../compiler/parser.cpp"
+#line 2091 "../compiler/parser.cpp"
     break;
 
   case 39: /* condition: value NEQ value  */
-#line 740 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 755 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -2088,11 +2103,11 @@ yyreduce:
             );
             (yyval.attr)->str_value = "JZERO 2\nJUMP";
         }
-#line 2092 "../compiler/parser.cpp"
+#line 2107 "../compiler/parser.cpp"
     break;
 
   case 40: /* condition: value '>' value  */
-#line 751 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 766 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         { //EXCESS TOKEN ALREADY CLEANED UP!
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -2104,11 +2119,11 @@ yyreduce:
             );
             (yyval.attr)->str_value = "JPOS";
         }
-#line 2108 "../compiler/parser.cpp"
+#line 2123 "../compiler/parser.cpp"
     break;
 
   case 41: /* condition: value '<' value  */
-#line 762 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 777 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -2120,11 +2135,11 @@ yyreduce:
             );
             (yyval.attr)->str_value = "JNEG";
         }
-#line 2124 "../compiler/parser.cpp"
+#line 2139 "../compiler/parser.cpp"
     break;
 
   case 42: /* condition: value GEQ value  */
-#line 773 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 788 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -2136,11 +2151,11 @@ yyreduce:
             );
             (yyval.attr)->str_value = "JNEG 2\nJUMP";
         }
-#line 2140 "../compiler/parser.cpp"
+#line 2155 "../compiler/parser.cpp"
     break;
 
   case 43: /* condition: value LEQ value  */
-#line 784 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 799 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                         {
             (yyval.attr) = parse_condition(
                 (yyvsp[-2].attr), (yyvsp[0].attr),
@@ -2152,50 +2167,50 @@ yyreduce:
             );
             (yyval.attr)->str_value = "JPOS 2\nJUMP";
         }
-#line 2156 "../compiler/parser.cpp"
+#line 2171 "../compiler/parser.cpp"
     break;
 
   case 44: /* signed_number: NUMBER  */
-#line 798 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 813 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
            {
             (yyval.attr) = (yyvsp[0].attr);
             (yyval.attr)->type = LONG;
         }
-#line 2165 "../compiler/parser.cpp"
+#line 2180 "../compiler/parser.cpp"
     break;
 
   case 45: /* signed_number: '-' NUMBER  */
-#line 802 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 817 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                  {
             (yyval.attr) = (yyvsp[0].attr);
             (yyval.attr)->long_value = -(yyvsp[0].attr)->long_value;
             (yyval.attr)->type = LONG;
         }
-#line 2175 "../compiler/parser.cpp"
+#line 2190 "../compiler/parser.cpp"
     break;
 
   case 46: /* value: signed_number  */
-#line 810 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 825 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                   {
             (yyval.attr) = (yyvsp[0].attr);
             //$$->str_value = "rval";
             (yyval.attr)->type = LONG;
         }
-#line 2185 "../compiler/parser.cpp"
+#line 2200 "../compiler/parser.cpp"
     break;
 
   case 47: /* value: identifier  */
-#line 815 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 830 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                  {
             (yyval.attr) = (yyvsp[0].attr);
             //$$->str_value = $1->str_value;
             //$$->register_no = $1->register_no;
         }
-#line 2195 "../compiler/parser.cpp"
+#line 2210 "../compiler/parser.cpp"
     break;
 
   case 48: /* tidentifier: pidentifier  */
-#line 823 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 838 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                 {
             if (regs.contains((yyvsp[0].attr)->str_value)) {
                 yyerror("ambiguous declaration");
@@ -2206,11 +2221,11 @@ yyreduce:
             (yyval.attr)->lineno = yylineno;
             (yyval.attr)->register_no = regs.add((yyvsp[0].attr)->str_value);
         }
-#line 2210 "../compiler/parser.cpp"
+#line 2225 "../compiler/parser.cpp"
     break;
 
   case 49: /* identifier: pidentifier  */
-#line 836 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 851 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                 {
             //translation stays empty as we know the pid register location
             (yyval.attr) = (yyvsp[0].attr);
@@ -2220,18 +2235,25 @@ yyreduce:
             if (!regs.contains((yyvsp[0].attr)->str_value)) {
                 yyerror("undefined identifier", yylineno, (yyval.attr)->str_value);
             }
+            if (regs.get_pid((yyvsp[0].attr)->str_value).size != 1) {
+                yyerror("implicit index argument of a table is forbidden due to the docummentation", yylineno, (yyval.attr)->str_value);
+            }
+
             (yyval.attr)->register_no = regs.at((yyvsp[0].attr)->str_value);
             //cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
         }
-#line 2227 "../compiler/parser.cpp"
+#line 2246 "../compiler/parser.cpp"
     break;
 
   case 50: /* identifier: pidentifier '[' pidentifier ']'  */
-#line 848 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 867 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                       {
             (yyval.attr) = (yyvsp[-3].attr);
             if (!regs.contains((yyvsp[-3].attr)->str_value)) {
                 yyerror("undefined identifier", yylineno, (yyvsp[-3].attr)->str_value);
+            }
+            if (!regs.contains((yyvsp[-1].attr)->str_value)) {
+                yyerror("undefined identifier", yylineno, (yyvsp[-1].attr)->str_value);
             }
 
             const auto& table_pid_type = regs.get_pid((yyvsp[-3].attr)->str_value);
@@ -2256,11 +2278,11 @@ yyreduce:
             (yyval.attr)->lineno = yylineno;
             free((yyvsp[-1].attr));
         }
-#line 2260 "../compiler/parser.cpp"
+#line 2282 "../compiler/parser.cpp"
     break;
 
   case 51: /* identifier: pidentifier '[' signed_number ']'  */
-#line 876 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 898 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
                                         {
             (yyval.attr) = (yyvsp[-3].attr);
             if (!regs.contains((yyvsp[-3].attr)->str_value)) {
@@ -2290,11 +2312,11 @@ yyreduce:
             (yyval.attr)->lineno = yylineno;
             free((yyvsp[-1].attr));
         }
-#line 2294 "../compiler/parser.cpp"
+#line 2316 "../compiler/parser.cpp"
     break;
 
 
-#line 2298 "../compiler/parser.cpp"
+#line 2320 "../compiler/parser.cpp"
 
       default: break;
     }
@@ -2487,7 +2509,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 907 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 929 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
 
 

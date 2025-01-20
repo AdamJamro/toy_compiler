@@ -128,6 +128,7 @@ procedures:
         const auto& fun_name = $3->str_value;
         const auto& arguments = $3->translation;
         const auto& declarations = $5->translation;
+        const auto proc_block_size = $1->long_value; // we store there the size
         auto& proc_commands = $7->translation;
 
         if (regs.contains(fun_name)){
@@ -136,7 +137,7 @@ procedures:
         const auto return_reg = regs.add(fun_name);
 
         // store procedure's data
-        const auto fun_line_no = $1->translation.size(); // line indexes are shifted down by one
+        const auto fun_line_no = proc_block_size; // don't add one since we index starting at 0
         const auto first_arg = regs.at(arguments.front());
         funs.add(fun_name, fun_line_no, arguments.size(), first_arg);
 
@@ -156,14 +157,17 @@ procedures:
         $$ = $1;
         $1->translation.splice($1->translation.end(), proc_commands);
         $$->translation.emplace_back("RTRN " + to_string(return_reg));
+        proc_line_count += 1; // add one for the return statement
+        $$->long_value = proc_block_size + proc_line_count; // update the size; it's not equal to the $$->translation size!!!
 
         // forget this context after moving to the next procedure
         for (const auto& pid : arguments) {
             regs.forget_pid(pid);
         }
-        // TODO forget regular declarations
+        // forget regular declarations
         for (const auto& pid : declarations) {
             regs.forget_pid(pid);
+            cout << pid << " has been forgotten" << endl;
         }
         free($3);
         free($5);
@@ -173,6 +177,7 @@ procedures:
         const auto& fun_name = $3->str_value;
         const auto& arguments = $3->translation;
         auto& proc_commands = $6->translation;
+        auto proc_block_size = $1->long_value; // we store there the size
 
         if (regs.contains(fun_name)){
             yyerror("procedure's name is ambiguous", yylineno, fun_name);
@@ -180,7 +185,7 @@ procedures:
         const auto return_reg = regs.add(fun_name);
 
         // store procedure's data
-        const auto fun_line_no = $1->translation.size();
+        const auto fun_line_no = proc_block_size; // don't add one since we index starting at 0
         const auto first_arg = regs.at(arguments.front());
         funs.add(fun_name, fun_line_no, arguments.size(), first_arg);
 
@@ -200,16 +205,20 @@ procedures:
         $$ = $1;
         $1->translation.splice($1->translation.end(), $6->translation);
         $$->translation.emplace_back("RTRN " + to_string(return_reg));
+        proc_line_count += 1; // add one for the return statement
+        $$->long_value = proc_block_size + proc_line_count; // update the size; it's not equal to the $$->translation size!!!
 
         // forget this context after moving to the next procedure
         for (const auto& pid : arguments) {
             regs.forget_pid(pid);
         }
+
         free($3);
         free($6);
     }
     | %empty {
         $$ = new TokenAttribute();
+        $$->long_value = 0;
         $$->translation = {};
     }
     ;
@@ -437,13 +446,16 @@ command:
 
              auto loop_body_size = $8->translation.size();
              auto [for_head, for_footer] = parse_for_loop($4, $6, tid_register, loop_body_size, cached_constants, regs, fast_loop);
-             // WE NEED TO REVERSE THE LOOP
+
+             // REVERSE THE LOOP
              for (auto& header_line : for_head) {
-                 if (header_line.find("JPOS" ) != string::npos) {
+                 if (header_line.find("JPOS") != string::npos) {
                      header_line.replace(0, 4, "JNEG");
                  } else if (header_line.find("JNEG") != string::npos) {
                      header_line.replace(0, 4, "JPOS");
                  }
+                 // each logic condition of type a < b or a <= b
+                 // gets translated into b < a or b <= a respectively
               }
              for (auto& footer_line : for_footer) {
                 if (footer_line.find("ADD [1]") != string::npos) {
@@ -453,6 +465,8 @@ command:
                 } else if (footer_line.find("JNEG") != string::npos) {
                     footer_line.replace(0, 4, "JPOS");
                 }
+                // we need to do the same here but with addition
+                // we make sure each iteration decrements the iterator
              }
 
 
@@ -605,7 +619,7 @@ declarations:
             $$->translation = {pid};
         }
     | pidentifier '[' signed_number ':' signed_number ']' {
-            const auto& pid = $3->str_value;
+            const auto& pid = $1->str_value;
             if (regs.contains(pid)) {
                 yyerror("identifier redeclaration", yylineno, pid);
             }
@@ -616,6 +630,7 @@ declarations:
             }
             $$ = $1;
             $$->translation = {pid};
+
             free($3);
             free($5);
         }
@@ -842,6 +857,10 @@ identifier:
             if (!regs.contains($1->str_value)) {
                 yyerror("undefined identifier", yylineno, $$->str_value);
             }
+            if (regs.get_pid($1->str_value).size != 1) {
+                yyerror("implicit index argument of a table is forbidden due to the docummentation", yylineno, $$->str_value);
+            }
+
             $$->register_no = regs.at($1->str_value);
             //cout << "pid: " << $$->str_value << " with register_no " << $$->register_no << endl;
         }
@@ -849,6 +868,9 @@ identifier:
             $$ = $1;
             if (!regs.contains($1->str_value)) {
                 yyerror("undefined identifier", yylineno, $1->str_value);
+            }
+            if (!regs.contains($3->str_value)) {
+                yyerror("undefined identifier", yylineno, $3->str_value);
             }
 
             const auto& table_pid_type = regs.get_pid($1->str_value);
