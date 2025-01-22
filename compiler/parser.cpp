@@ -1283,7 +1283,7 @@ yyreduce:
                 //parse_line(line, line_count, translation_header_offset, cache_regs); // replaces this_line with actual line number considering header_offset
                 output_file << line << endl;
                 line_count++;
-                line_count += std::ranges::count(line, '\n');;
+                line_count += std::ranges::count(line, '\n');
             }
         }
 
@@ -2310,13 +2310,14 @@ yyreduce:
             }
 
             (yyval.attr)->lineno = yylineno;
+            (yyval.attr)->register_no = regs.at((yyvsp[-3].attr)->str_value, (yyvsp[-1].attr)->long_value);
             free((yyvsp[-1].attr));
         }
-#line 2316 "../compiler/parser.cpp"
+#line 2317 "../compiler/parser.cpp"
     break;
 
 
-#line 2320 "../compiler/parser.cpp"
+#line 2321 "../compiler/parser.cpp"
 
       default: break;
     }
@@ -2509,7 +2510,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 929 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
+#line 930 "/mnt/c/Users/adame/CLionProjects/jftt_compiler/compiler/parser.y"
 
 
 

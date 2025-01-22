@@ -30,7 +30,7 @@ TokenAttribute* parse_expression(TokenAttribute* token1, TokenAttribute* token2,
             adr_token->translation.emplace_back("STORE " + std::to_string(tmp_reg));
             adr_token->translation.splice(adr_token->translation.end(), other_token->translation);
             adr_token->translation.emplace_back("LOADI 0");
-            adr_token->translation.emplace_back((swap ? reverse_operation : operation) + " " + std::to_string(tmp_reg));
+            adr_token->translation.emplace_back(reverse_operation + " " + std::to_string(tmp_reg));
         } else if (other_token->type == STRING) {
             // ADDRESS .. PID
             adr_token->translation.emplace_back((swap ? reverse_operation : operation) +  " " + std::to_string(other_token->register_no));
@@ -326,7 +326,7 @@ std::pair<std::list<std::string>, std::list<std::string>> parse_for_loop(const T
             for_header = token2->translation; // load address1 to r0
             for_header.emplace_back("LOADI 0");
             for_header.emplace_back("STORE " + std::to_string(tid_upper_limit_register));
-            for_header.emplace_back("LOAD " + std::to_string(token2->register_no));
+            for_header.emplace_back("LOAD " + std::to_string(token1->register_no));
             for_header.emplace_back("STORE " + std::to_string(tid_iterator_register));
             // first cond check is necessary and will be added when footer is complete
             for_header.emplace_back("SUB " + std::to_string(tid_upper_limit_register));
@@ -464,10 +464,11 @@ void postprocess(const std::string& filename, register_table& regs) {
         output_file << "JUMP " + std::to_string(lib_size + 1) << std::endl;
         header_size += 1;
     }
-
+    auto first_line_no_of_file_contents = header_size;
     if (file_contents.front().compare(0, 4, "JUMP") == 0) {
         header_size += 1;
     }
+    // header_size fully calculated
 
     if (multiplication_flag) {
         for (auto& mul_line : multiplication_contents) {
@@ -482,7 +483,7 @@ void postprocess(const std::string& filename, register_table& regs) {
         }
     }
 
-    long line_count = header_size - 1;
+    long line_count = first_line_no_of_file_contents;
     for (auto& translation_line : file_contents) {
         std::cout<<translation_line<<std::endl;
         parse_proc_calls_jump(translation_line, line_count, header_size);
@@ -490,13 +491,13 @@ void postprocess(const std::string& filename, register_table& regs) {
     }
 
     std::list<jump_line> jump_lines;
-    line_count = header_size - 1;
+    line_count = first_line_no_of_file_contents;
     for (auto& translation_line : file_contents) {
         check_for_jumps(translation_line, line_count, jump_lines);
         line_count++;
     }
 
-    line_count = header_size - 1;
+    line_count = first_line_no_of_file_contents;
     auto it = file_contents.begin();
     while (it != file_contents.end()) {
         auto& translation_line = *it;
@@ -542,7 +543,7 @@ void postprocess(const std::string& filename, register_table& regs) {
         it = nextIt;
     }
 
-    line_count = header_size - 1; // for some reason file_contents contains JUMP to the main (procs skip)
+    line_count = first_line_no_of_file_contents;
     for (auto& translation_line : file_contents) {
         if (translation_line.compare(0, 6, "#EMPTY") == 0) {
             continue;

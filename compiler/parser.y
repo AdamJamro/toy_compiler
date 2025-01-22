@@ -96,7 +96,7 @@ program_all:
                 //parse_line(line, line_count, translation_header_offset, cache_regs); // replaces this_line with actual line number considering header_offset
                 output_file << line << endl;
                 line_count++;
-                line_count += std::ranges::count(line, '\n');;
+                line_count += std::ranges::count(line, '\n');
             }
         }
 
@@ -922,6 +922,7 @@ identifier:
             }
 
             $$->lineno = yylineno;
+            $$->register_no = regs.at($1->str_value, $3->long_value);
             free($3);
         }
     ;
