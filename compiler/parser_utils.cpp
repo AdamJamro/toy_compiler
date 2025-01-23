@@ -522,8 +522,22 @@ void postprocess(const std::string& filename, register_table& regs) {
             line_count += translation.size();
             file_contents.splice(current_pos, translation);
             translation_line = "#EMPTY";
+        } else if (translation_line.find("RSUBI") != std::string::npos) {
+            // reverse subtraction and load value from address
+            auto line_tail = translation_line.substr(6, translation_line.back());
+
+            auto translation = {
+                "STORE " + std::to_string(last_free_reg) + "\t# RSUB",
+                "LOADI " + line_tail,
+                "SUB " + std::to_string(last_free_reg)
+            };
+            last_free_reg++;
+            update_jump_lines(jump_lines, translation.size() - 1, line_count);
+            line_count += translation.size();
+            file_contents.splice(current_pos, translation);
+            translation_line = "#EMPTY";
         } else if (translation_line.find("RSUB") != std::string::npos) {
-            // reverse subtraction
+            // reverse operation
             auto line_tail = translation_line.substr(5, translation_line.back());
 
             auto translation = {
@@ -878,10 +892,11 @@ void amend_for_additional_lines(std::list<std::string>& proc_commands, const lon
 }
 
 void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, const std::list<long>& arg_regs, const long line_no) {
+    const auto line_comment = line.find("\t#") == std::string::npos ? "" : line.substr(line.find("\t#"));
     for (const auto& reg : arg_regs) {
         const auto& reg_str = std::to_string(reg);
         if (const auto pos = line.find(reg_str); pos != std::string::npos) {
-            auto stripped_line = line.find("\t#") == std::string::npos ? line : line.substr(0, line.find("\t#")) ;
+            auto stripped_line = line.find("\t#") == std::string::npos ? line : line.substr(0, line.find("\t#"));
             stripped_line = stripped_line.find(" #") == std::string::npos ? stripped_line : stripped_line.substr(0, stripped_line.find(" #")) ;
             // std::cout << "line: \""<< line << '"' << std::endl;
             // std::cout << "stripped line: \""<< stripped_line << '"' << std::endl;
@@ -919,7 +934,7 @@ void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, c
                     if (line.find("[") != std::string::npos) {
                         return; // the arg was used as a constant
                     }
-                    line = "LOADI " + reg_str;
+                    line = "LOADI " + reg_str + line_comment;
                 }
 
                 continue;
@@ -958,6 +973,8 @@ void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, c
                 line = "RDIVI " + reg_str;
             } else if (line.compare(0, 3, "MOD") == 0) {
                 line = "MODI " + reg_str;
+            } else if (line.compare(0, 4, "RMOD") == 0) {
+                line = "RMODI " + reg_str;
             } else if (line.compare(0, 3, "GET") == 0) {
                 line = "GET 0\nSTOREI " + reg_str;
                 amend_for_additional_lines(proc_commands, 1, line_no);
