@@ -1,40 +1,38 @@
-# University Project: [Project Name]
+# Compiler
 
 ## Author
-- **Name:** [Your Full Name]
-- **Index Number:** [Your Index Number]
+- **Name:** Adam Jamrozinski
+- **Index Number:** 268423
 
-## Project Description
-This project is a C++ application developed as part of a university course. It demonstrates [briefly describe the purpose or functionality of the project].
+## Language: C++, bison & flex
 
 ---
 
 ## Files Included
-- `main.cpp`: The main entry point of the application.
-- `CMakeLists.txt`: CMake configuration file for building the project.
-- `[OtherFile1.cpp]`: [Brief description of the file's purpose].
-- `[OtherFile2.h]`: [Brief description of the file's purpose].
-- `[OtherFile3.cpp]`: [Brief description of the file's purpose].
-- `README.md`: This file, containing project documentation.
-
+- `compiler/CMakeLists.txt`: CMake configuration file for building the project.
+- `compiler/parser.y`: bison parser.
+- `compiler/parser.h`: bison header file output.
+- `compiler/parser.cpp`: bison parser file output.
+- `compiler/lexer.l`: flex scanner.
+- `compiler/lexer.cpp`: flex scanner file output.
+- `compiler/parser_utils.h`: header file with all additional utilities the parser relies on.
+- `compiler/parser_utils.cpp`: all the implementations for the utilities.
+- `compiler/math_module/multiplication.mr`: machine-readable implementation of multiplication algorithm.
+- `compiler/math_module/division.mr`: implementation of division and modulo.
+- `README.md`: This file, containing project description.
+  
 ---
+
 
 ## Prerequisites
 Before building the project, ensure the following tools are installed on your system:
-- **CMake** (version 3.10 or higher)
+- **CMake** (version 3.28 or higher)
 - **C++ Compiler**:
     - Linux: GCC or Clang
-    - Windows: MSVC (Visual Studio) or MinGW
+- **C++ Standard**:
+  - C++20
 - **Build Tools**:
     - Linux: Make or Ninja
-    - Windows: Visual Studio Build Tools or MinGW Makefiles
-
+- **Flex** (min version 2.6.4)
+- **Bison** (min version 3.8.2)
 ---
-
-## Building the Project with CMake
-
-### On Linux
-1. **Clone the repository** (if applicable):
-   ```bash
-   git clone [repository-url]
-   cd [repository-folder]
