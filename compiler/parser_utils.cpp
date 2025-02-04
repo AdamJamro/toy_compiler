@@ -485,7 +485,7 @@ void postprocess(const std::string& filename, register_table& regs) {
 
     long line_count = first_line_no_of_file_contents;
     for (auto& translation_line : file_contents) {
-        std::cout<<translation_line<<std::endl;
+        //std::cout<<translation_line<<std::endl;
         parse_proc_calls_jump(translation_line, line_count, header_size);
         line_count++;
     }
@@ -901,7 +901,7 @@ void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, c
             // std::cout << "line: \""<< line << '"' << std::endl;
             // std::cout << "stripped line: \""<< stripped_line << '"' << std::endl;
             if (stripped_line.find(reg_str) == std::string::npos) {
-                std::cout << "FALSE POSITIVE: "<< line << std::endl;
+                //std::cout << "FALSE POSITIVE: "<< line << ";\tregister: " << reg_str << std::endl;
                 continue; // false positive
             }
 
@@ -914,7 +914,7 @@ void parse_proc_line(std::string& line, std::list<std::string>& proc_commands, c
             // std::cout << "argument: \""<< argument  << '"' << std::endl;
             // std::cout << "real argument: \""<< reg_str << '"' << std::endl;
             if (argument.compare(reg_str) != 0 && argument.compare(reg_str + "]") != 0) {
-                std::cout << "FALSE POSITIVE: "<< line << std::endl;
+                //std::cout << "FALSE POSITIVE: "<< line << ";\tregister: " << reg_str << std::endl;
                 continue; // false positive
             }
 
@@ -1029,14 +1029,24 @@ int register_table::assign_register() {
     return reg;
 }
 
+void register_table::set_initialized(const std::string& pid) {
+    table.at(pid).initialized = true;
+}
+
+void register_table::check_if_initialized(const std::string& pid) const {
+    if (!table.at(pid).initialized) {
+        throw std::runtime_error("WARNING: UNINITIALIZED VARIABLE: " + pid);
+    }
+}
+
 int register_table::assign_registers(const int size) {
     if (free_registers.empty()) {
         throw std::runtime_error("MEMORY ERROR: OUT OF REGISTERS");
     }
-    std::cout << "assignment size: "<<size<<std::endl<<"free regs before oparation:" << std::endl;
-    for (const auto& [first, last] : free_registers) {
-        printf("from %lld to %lld\n", first, last);
-    }
+    //std::cout << "assignment size: "<<size<<std::endl<<"free regs before oparation:" << std::endl;
+    //for (const auto& [first, last] : free_registers) {
+    //    printf("from %lld to %lld\n", first, last);
+    //}
 
     auto it = free_registers.begin(); // first free interval of registers
     const auto end = free_registers.end();
@@ -1077,7 +1087,7 @@ register_table::register_table() : free_registers(), table() {
 }
 
 void register_table::remove(const std::string& pid) { // maybe free_pid() ?
-    auto [size, reg, _] = table.at(pid);
+    auto [size, reg, index_shift, initialized] = table.at(pid);
     int from = reg;
     int to = from + size;
     auto range = std::make_pair(from, to);
@@ -1225,11 +1235,15 @@ int register_table::add_table(const std::string &pid, const int from, const int 
 
     pid_type new_pid;
     new_pid.size = to - from + 1;
-    new_pid.index_shift = from;
-    new_pid.register_no = assign_registers(new_pid.size);
+    if (new_pid.size == 1) {
+        throw std::invalid_argument("this program won't allow tables with size of 1! Use a variable instead.");
+    }
     if (new_pid.size <= 0) {
         throw std::invalid_argument("this program cannot declare insideout tables!");
     }
+    new_pid.index_shift = from;
+    new_pid.register_no = assign_registers(new_pid.size);
+
     table[pid] = new_pid;
     return new_pid.register_no;
 }

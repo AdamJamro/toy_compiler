@@ -101,6 +101,7 @@ struct pid_type {
         }
         return register_no + offset;
     }
+    bool initialized = false;
 };
 
 class register_table {
@@ -141,6 +142,10 @@ public:
     long unused_register() const;
 
     int assign_register(void);
+
+    void set_initialized(const std::string &pid);
+
+    void check_if_initialized(const std::string &pid) const;
 
     int assign_registers(int size);
 };

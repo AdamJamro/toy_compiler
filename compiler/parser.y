@@ -167,7 +167,6 @@ procedures:
         // forget regular declarations
         for (const auto& pid : declarations) {
             regs.forget_pid(pid);
-            cout << pid << " has been forgotten" << endl;
         }
         free($3);
         free($5);
@@ -271,6 +270,7 @@ command:
                 // expression value already in r0!
                 $$->translation.emplace_back("STORE " + to_string($1->register_no) + "\t#" + $1->str_value + ((regs.get_pid($1->str_value).size > 1) ? ("[" + to_string($1->register_no - regs.at($1->str_value) + regs.get_pid($1->str_value).index_shift) + "]") : ""));
             }
+            regs.set_initialized($1->str_value);
             free($1);
         }
     | IF condition THEN commands ELSE commands ENDIF {
@@ -321,7 +321,7 @@ command:
                 $$->translation.splice($$->translation.end(), $4->translation);
                 $$->translation.emplace_back("JUMP -" + to_string($$->translation.size()));
             } else { // rval
-                if ($2->long_value == 0) { // always true
+                if ($2->long_value == 0) { // while condition always true
                     cerr << "Warning on line: " << yylineno << " an endless while loop!";
                     $$->translation = $4->translation;
                     $$->translation.emplace_back("JUMP -" + to_string($$->translation.size()));
@@ -373,16 +373,23 @@ command:
                 line_count++;
                 if ((line.compare(0, 6 + $2->str_value.length(), "STORE " + to_string(tid_register)) == 0) ||
                 (line.compare(0, 4 + $2->str_value.length(), "GET " + to_string(tid_register)) == 0)) {
-                    yyerror("for-loop iterator modification inside the loop is forbidden!", $2->lineno + line_count, $2->str_value);
+                    yyerror("for-loop iterator modification inside the loop is forbidden!", $2->lineno, $2->str_value);
                 }
-
+                if (
+                    (line.find("[" + to_string(tid_register) + "]") != string::npos)
+                    && (line.find("# passing address") != string::npos)
+                    ) {
+                    yyerror("for-loop iterator cannot be passed as reference!", $2->lineno, $2->str_value);
+                }
                 const auto str_tid_register = to_string(tid_register);
                 if (
-                    (str_tid_register.length() < line.length() &&
-                    std::equal(str_tid_register.rbegin(), str_tid_register.rend(), line.rbegin()))
+                    (str_tid_register.length() < line.length()) &&
+                    (std::equal(str_tid_register.rbegin(), str_tid_register.rend(), line.rbegin()))
                     ) {
+                    // sometimes catches false positives like "STORE 1" and "STORE 11"
+                    // but nobody pays me to implement each minute detail
                     fast_loop = false;
-                    cout << "warning fast_loop disabled. LINE: " << line << endl;
+                    //cout << "warning fast for loop disabled due to LINE: " << line << endl;
                 }
             }
             // check for invalid range
@@ -423,7 +430,13 @@ command:
                  line_count++;
                  if ((line.compare(0, 6 + $2->str_value.length(), "STORE " + to_string(tid_register)) == 0) ||
                  (line.compare(0, 4 + $2->str_value.length(), "GET " + to_string(tid_register)) == 0)) {
-                     yyerror("for-loop iterator modification inside the loop is forbidden!", $2->lineno + line_count, $2->str_value);
+                     yyerror("for-loop iterator modification inside the loop is forbidden!", $2->lineno, $2->str_value);
+                 }
+                 if (
+                     (line.find("[" + to_string(tid_register) + "]") != string::npos)
+                     && (line.find("# passing address") != string::npos)
+                     ) {
+                     yyerror("for-loop iterator cannot be passed as reference!", $2->lineno, $2->str_value);
                  }
 
                  const auto str_tid_register = to_string(tid_register);
@@ -434,7 +447,7 @@ command:
                      std::equal(str_tid_register.rbegin(), str_tid_register.rend(), stripped_line.rbegin()))
                      ) {
                      fast_loop = false;
-                     cout << "warning fast_loop disabled. LINE: " << line << endl;
+                     //cout << "warning fast for loop disabled due to LINE: " << line << endl;
                  }
              }
              // check for invalid range
@@ -500,6 +513,10 @@ command:
                 // store it where the tmp address points to
                 $$->translation.emplace_back("STOREI " + to_string(tmp_reg));
             } else { // STRING or LONG
+                if ($2->type == STRING) {
+                    regs.set_initialized($2->str_value);
+                }
+
                 // if it was a long then register_no is expected be 0
                 $$->translation.emplace_back("GET " + to_string($2->register_no));
             }
@@ -550,6 +567,8 @@ proc_call:
         const auto arg_no = funs.get_arg_count(fun_name);
         const auto first_arg_register = funs.get_first_arg_register(fun_name);
         for (const auto& pid : arguments) {
+            regs.set_initialized(pid);
+
             arg_count++;
             if (arg_count > arg_no) {
                 yyerror("too many arguments in procedure call", yylineno, fun_name);
@@ -600,9 +619,10 @@ declarations:
             }
             try {
                 regs.add_table(pid, $5->long_value, $7->long_value);
-            } catch (std::runtime_error e) {
-                yyerror(e.what());
+            } catch (const std::exception& e) {
+                yyerror(e.what(), yylineno, pid + "[" + to_string($5->long_value) + ":" + to_string($7->long_value) + "]");
             }
+
             $$ = $1;
             $$->translation.emplace_back(pid);
             free($3);
@@ -625,8 +645,8 @@ declarations:
             }
             try {
                 regs.add_table($1->str_value, $3->long_value, $5->long_value);
-            } catch (std::runtime_error e) {
-                yyerror(e.what());
+            } catch (const std::exception& e) {
+                yyerror(e.what(), yylineno, pid + "[" + to_string($3->long_value) + ":" + to_string($5->long_value) + "]");
             }
             $$ = $1;
             $$->translation = {pid};
@@ -642,6 +662,7 @@ args_decl:
           yyerror("identifier redeclaration", yylineno, pid);
         }
         regs.add(pid);
+        regs.set_initialized(pid); // assume it's initialized!
         $$ = $1;
         $$->translation.emplace_back(pid);
         free($3);
@@ -652,6 +673,7 @@ args_decl:
             yyerror("identifier redeclaration", yylineno, pid);
         }
         regs.add_proc_table(pid);
+        regs.set_initialized(pid); // assume it's initialized!
         $$ = $1;
         $$->translation.emplace_back(pid);
         free($4);
@@ -662,6 +684,7 @@ args_decl:
           yyerror("identifier redeclaration", yylineno, pid);
         }
         regs.add(pid);
+        regs.set_initialized(pid); // assume it's initialized!
         $$ = $1;
         $$->translation = {pid};
     }
@@ -671,6 +694,7 @@ args_decl:
             yyerror("identifier redeclaration", yylineno, pid);
         }
         regs.add_proc_table(pid);
+        regs.set_initialized(pid); // assume it's initialized!
         $$ = $2;
         $$->translation = {pid};
     }
@@ -829,6 +853,13 @@ value:
         }
     | identifier {
             $$ = $1;
+            if ($$->type == STRING) {
+                try {
+                    regs.check_if_initialized($1->str_value);
+                } catch (const std::exception& e) {
+                    cerr << e.what() << "; " << "line: " << yylineno << endl;
+                }
+            }
             //$$->str_value = $1->str_value;
             //$$->register_no = $1->register_no;
         }
@@ -844,6 +875,7 @@ tidentifier:
             $$->str_value = $1->str_value;
             $$->lineno = yylineno;
             $$->register_no = regs.add($1->str_value);
+            regs.set_initialized($1->str_value); // assume always initialized in for loop head
         }
     ;
 
@@ -876,11 +908,14 @@ identifier:
             const auto& table_pid_type = regs.get_pid($1->str_value);
             const auto& index_pid_type = regs.get_pid($3->str_value);
 
-            if (index_pid_type.size == 0) {
-                yyerror("Cannot use table as a table index!");
+            if (table_pid_type.size == 1) {
+                yyerror("Cannot use [] square bracket operator on regular variables!", yylineno, $1->str_value);
+            }
+            if (index_pid_type.size != 1) {
+                yyerror("Cannot use table as a table index!", yylineno, $3->str_value);
             }
 
-            //CASE: IT IS A TABLE
+            //CASE: IT IS INDEED A TABLE
             if (table_pid_type.size != 0) {
                 const auto tab_offset = regs.at($1->str_value) - regs.get_pid($1->str_value).index_shift;
                 cached_constants.insert(tab_offset);    // missed optimization
@@ -903,6 +938,10 @@ identifier:
             const auto value = $3->long_value;
             const auto table_pid_type = regs.get_pid($1->str_value);
             const auto is_reference = table_pid_type.size == 0;
+
+            if (table_pid_type.size == 1) {
+                yyerror("Cannot use [] square bracket operator on regular variables!", yylineno, $1->str_value);
+            }
 
             //CASE: IT IS A TABLE REFERENCE
             if (is_reference) {
