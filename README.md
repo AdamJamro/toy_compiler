@@ -2,7 +2,6 @@
 
 ## Author
 - **Name:** Adam Jamrozinski
-- **Index Number:** 268423
 
 ## Language: C++, bison & flex
 
